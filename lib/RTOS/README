@@ -27,7 +27,7 @@ SensorTask
 - config/RobotConstants.hpp
 - Sortie:
 - Met à jour les valeurs dans RobotContext
-- (optionnel) envoie des messages dans une queue (ex: SensorDataQueue)
+- envoie des messages dans une queue (ex: SensorDataQueue)
 
 📌 Détail des tâches
 SensorTask
