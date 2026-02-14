@@ -4,11 +4,13 @@
 */
 
 #pragma once
-
+#include "SensorTypes.hpp"
 
 class SensorsInterface
 {
-public:
+    private:
+        SensorType type;
+    public:
     // That is my virtual destructor 
     virtual ~SensorsInterface() = default;
 
@@ -20,5 +22,8 @@ public:
 
      // get sensor value
      virtual float getValue() = 0;
+
+     virtual SensorType getType() = 0;
+     
 };
 
