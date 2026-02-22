@@ -1,0 +1,9 @@
+{
+  "id": "led1",
+  "type": "wokwi-led",
+  "left": 100,
+  "top": 50,
+  "attrs": {
+    "color": "red"
+  }
+}
