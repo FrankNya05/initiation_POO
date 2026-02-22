@@ -45,4 +45,4 @@ namespace RobotConfig {
     //  FRENAGE_CONTRE COURANT PAR BJT
     constexpr uint8_t BJT_COMMAND = 23;
     constexpr uint8_t BJT_COMMAND = 13;
-     
+}
