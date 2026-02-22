@@ -42,6 +42,7 @@ namespace RobotConfig {
      // IR_SENSOR
     constexpr uint8_t IR_SENSOR_FRONT_LEFT = 5;
     constexpr uint8_t IR_SENSOR_FRONT_RIGHT = 17;
-    //  FRENAGE_BJT
+    //  FRENAGE_CONTRE COURANT PAR BJT
     constexpr uint8_t BJT_COMMAND = 23;
-}
+    constexpr uint8_t BJT_COMMAND = 13;
+     
