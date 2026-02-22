@@ -46,9 +46,8 @@ namespace RobotConfig {
 
     // --- Capteurs IR (Infrarouge) ---
     // Pins GPIO standard disponibles
-    constexpr uint8_t IR_SENSOR_FRONT_LEFT = 13;
-    constexpr uint8_t IR_SENSOR_FRONT_RIGHT = 12; // Attention: ne pas forcer à 3.3V au boot
-
+    constexpr uint8_t IR_SENSOR_FRONT_LEFT = 36;  
+    constexpr uint8_t IR_SENSOR_FRONT_RIGHT = 39; 
     // --- Commande Freinage BJT ---
     // Une seule définition sur une pin stable
     constexpr uint8_t BJT_COMMAND = 23;
