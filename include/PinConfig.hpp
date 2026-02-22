@@ -22,9 +22,26 @@ namespace RobotConfig {
     constexpr int PWM_CHANNEL_RIGHT = 1;
 
     // paramtre UART
-    constexpr int TX_LIDAR = -1;
-    constexpr int RX_LIDAR = -1;
+    constexpr uint8_t TX_LIDAR = 4;
+    constexpr uint8_t RX_LIDAR = 5;
     
-    // paramtre UART
+    // battery sensor
+     constexpr uint8_t BATTERY_SENSOR = 12;
 
+    // IMU_SENSOR_I2C,
+     constexpr uint8_t SCL = 22;
+     constexpr uint8_t SDA = 21;
+
+    // ENCODER_SENSOR
+
+     constexpr uint8_t ENCODER_MOTOR_LEFT_P = 16;
+     constexpr uint8_t ENCODER_MOTOR_LEFT_H = 4;
+     constexpr uint8_t ENCODER_MOTOR_RIGHT_P = 0;
+     constexpr uint8_t ENCODER_MOTOR_RIGHT_H = 2;
+
+     // IR_SENSOR
+    constexpr uint8_t IR_SENSOR_FRONT_LEFT = 5;
+    constexpr uint8_t IR_SENSOR_FRONT_RIGHT = 17;
+    //  FRENAGE_BJT
+    constexpr uint8_t BJT_COMMAND = 23;
 }

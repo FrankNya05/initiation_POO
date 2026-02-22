@@ -28,8 +28,7 @@ public:
     float getValue(SensorType type) {
         for (auto& s : sensors)
             if (s->getType() == type)
-                //return s->getValue();
-                return -10.0;
+                return s->getValue();
         return -1.0f;
     }
 };

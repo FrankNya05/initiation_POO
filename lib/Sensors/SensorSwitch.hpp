@@ -15,13 +15,13 @@ class SensorSwitch:public SensorsInterface
     SensorSwitch(SensorType t): state(false),type(t){}//constructeur avec initialisation liste
 
     bool  init() override{
-       //pinMode(static_cast<uint8_t>(RobotConfig::START_BUTTON), INPUT);
+       pinMode(static_cast<uint8_t>(RobotConfig::START_BUTTON), INPUT);
         return RobotConfig::START_BUTTON;
     }
 
     // update sensor value
     void update() override{
-        //state = digitalRead(static_cast<uint8_t>(type));
+        state = digitalRead(static_cast<uint8_t>(type));
     
     }
 

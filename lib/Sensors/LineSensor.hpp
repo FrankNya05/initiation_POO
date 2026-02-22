@@ -16,12 +16,12 @@ public:
     LineSensor(SensorType t) : state(false), type(t) {}
 
     bool init() override {
-        //pinMode(static_cast<uint8_t>(type), INPUT);
+        pinMode(static_cast<uint8_t>(type), INPUT);
         return true;
     }
 
     void update() override {
-        //state = digitalRead(static_cast<uint8_t>(type));
+        state = digitalRead(static_cast<uint8_t>(type));
     }
 
     float getValue() override {
