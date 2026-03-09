@@ -10,19 +10,16 @@ All enumerated sensors for this allpication
 
 // Structure envoyée via la queue
 
-struct SensorData {
-    float lidar;
-    float lineLeft;
-    float lineRight;
-    float ultrasonic;
-};
 
 enum class SensorType
 {
     LIDAR,
     LINE,
-    ULTRASONIC
+    ULTRASONIC,
+    TOFSensor
 };
+
+enum status{ RUN,NO_RUN};
 
 enum class SensorPosition
 {
@@ -30,5 +27,34 @@ enum class SensorPosition
     RIGHT,
     FRONT,
     BACK,
-    CENTER
+    CENTER,
+    UNKNOWN
 };
+
+ struct TOFConfig{
+  uint8_t addr;
+  SensorPosition position;
+};
+
+enum class SensorDims : uint8_t {
+    SCALAR = 1,
+    VEC3 = 3
+};
+
+union SensorValue {
+    float scalar;
+    struct { float x, y, z; } vector;
+
+    SensorValue() : scalar(0.0f) {}
+    explicit SensorValue(float s) : scalar(s) {}
+    SensorValue(float x, float y, float z) : vector{x, y, z} {}
+};
+
+struct SensorData {
+    SensorPosition position  = SensorPosition::UNKNOWN;
+    SensorValue    value     = {};
+    SensorDims     dims      = SensorDims::SCALAR;
+    uint32_t       timestamp = 0;
+    bool           isValid   = false;
+};
+

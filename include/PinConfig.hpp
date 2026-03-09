@@ -37,6 +37,13 @@ namespace RobotConfig {
     constexpr uint8_t SCL = 22;
     constexpr uint8_t SDA = 21;
 
+    // TOF Laser Range Sensor Mini
+    constexpr uint8_t TOF_SCL = SCL;  // Broche VN
+    constexpr uint8_t TOF_SDA = SDA; // Pin digitale/analogue safe
+
+    constexpr uint8_t TOF_IIC_ADDR  = 0x09;  // addresse i2c du premier capteur de distance
+
+    
     // --- Encodeurs Moteurs (Entrées numériques rapides) ---
     // Déplacés sur des pins "safe" pour éviter les erreurs de boot
     constexpr uint8_t ENCODER_MOTOR_LEFT_P = 18;
@@ -45,9 +52,8 @@ namespace RobotConfig {
     constexpr uint8_t ENCODER_MOTOR_RIGHT_H = 5;
 
     // --- Capteurs Infrarouges SHARP (Analogiques sur ADC1) ---
-    // Connectez vos capteurs GP2Y0A... ici pour le Bluetooth
-    constexpr uint8_t IR_SENSOR_FRONT_LEFT = 39;  // Broche VN
-    constexpr uint8_t IR_SENSOR_FRONT_RIGHT = 13; // Pin digitale/analogue safe
+
+   
 
     // --- Commande Freinage BJT ---
     // Pin de sortie stable pour le transistor
