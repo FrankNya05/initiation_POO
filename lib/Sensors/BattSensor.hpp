@@ -45,7 +45,7 @@ namespace BattConfig {
     // Filtrage ADC : nombre de lectures moyennées
     constexpr uint8_t FILTER_SAMPLES = 10;
 }
-
+using namespace BattConfig;
 // ─────────────────────────────────────────────
 //  Classe BattSensor
 // ─────────────────────────────────────────────

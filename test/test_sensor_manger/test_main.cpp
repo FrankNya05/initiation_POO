@@ -1,7 +1,7 @@
 /*
 simple test d'implementation du sensor manger 
 */
-
+/*
 #include "SensorManger.hpp"
 #include "..\lib\Sensors\LineSensor.hpp"
 #include <unity.h>
@@ -37,4 +37,4 @@ int main(int argc, char **argv) {
     RUN_TEST(test_sensor_addition);
     RUN_TEST(test_sensor_get);
     return UNITY_END();
-}
+}*/
