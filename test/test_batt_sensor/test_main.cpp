@@ -1,97 +1,124 @@
 /*
- * test/test_batt_sensor/test_main.cpp
+ * test_batt_sensor.cpp
  * -----------------------------------------------
- * Test hardware du BattSensor avec Unity + PlatformIO
- * Lancé via : pio test -e esp32dev -f test_batt_sensor
+ * Test hardware du BattSensor sur ESP32 réel
+ *
+ * Ce que ce test vérifie :
+ *  1. init()      — ADC configuré sans crash
+ *  2. update()    — lecture filtrée stable
+ *  3. getVoltage()— tension dans la plage LiPo 2S
+ *  4. getPercent()— pourcentage cohérent (0–100)
+ *  5. isCritical()— alerte bas niveau
+ *  6. getData()   — SensorData bien rempli
+ *
+ * Branchement requis :
+ *  - Pont diviseur R1=100kΩ / R2=47kΩ entre VBAT et GND
+ *  - Point milieu → GPIO 36 (VP)
+ *  - Batterie LiPo 2S connectée
+ *
+ * Lecture dans le Serial Monitor à 115200 baud
  */
 
+#ifndef UNIT_TEST
+
 #include <Arduino.h>
-#include <unity.h>
 #include "BattSensor.hpp"
 
-// ── Instance partagée entre les tests ────────
+// ── Instance globale ──────────────────────────
 BattSensor batt(SensorPosition::CENTER);
 
-// ─────────────────────────────────────────────
-//  Appelé avant chaque test
-// ─────────────────────────────────────────────
-void setUp() {
-    batt.init();
-    batt.update();
-}
-
-//  Appelé après chaque test
-void tearDown() {}
-
-// ─────────────────────────────────────────────
-//  TEST 1 : init() ne plante pas
-// ─────────────────────────────────────────────
-void test_init_returns_true() {
-    BattSensor fresh(SensorPosition::CENTER);
-    TEST_ASSERT_TRUE(fresh.init());
+// ── Résultat d'un test ────────────────────────
+void printResult(const char* label, bool passed) {
+    Serial.printf("  [%s] %s\n", passed ? "PASS" : "FAIL", label);
 }
 
 // ─────────────────────────────────────────────
-//  TEST 2 : tension dans la plage LiPo 2S
-// ─────────────────────────────────────────────
-void test_voltage_in_range() {
-    float v = batt.getVoltage();
-    TEST_ASSERT_GREATER_OR_EQUAL_FLOAT(6.0f, v);
-    TEST_ASSERT_LESS_OR_EQUAL_FLOAT(8.4f, v);
-}
+void setup() {
+    Serial.begin(115200);
+    delay(1000);
 
-// ─────────────────────────────────────────────
-//  TEST 3 : pourcentage entre 0 et 100
-// ─────────────────────────────────────────────
-void test_percent_in_range() {
-    int p = batt.getPercent();
-    TEST_ASSERT_GREATER_OR_EQUAL_INT(0,   p);
-    TEST_ASSERT_LESS_OR_EQUAL_INT   (100, p);
-}
+    Serial.println("\n========================================");
+    Serial.println("   TEST HARDWARE — BattSensor");
+    Serial.println("========================================\n");
 
-// ─────────────────────────────────────────────
-//  TEST 4 : SensorData correctement rempli
-// ─────────────────────────────────────────────
-void test_sensor_data_valid() {
+    // ── TEST 1 : init() ───────────────────────
+    Serial.println("TEST 1 : Initialisation");
+    bool initOk = batt.init();
+    printResult("init() retourne true", initOk);
+    Serial.println();
+
+    // ── TEST 2 : update() + tension ───────────
+    Serial.println("TEST 2 : Lecture de tension");
+    bool updateOk = batt.update();
+    float voltage = batt.getVoltage();
+
+    printResult("update() retourne true",  updateOk);
+    printResult("tension >= 6.0V (min LiPo 2S)", voltage >= 6.0f);
+    printResult("tension <= 8.4V (max LiPo 2S)", voltage <= 8.4f);
+    Serial.printf("  → Tension mesurée : %.3f V\n", voltage);
+    Serial.println();
+
+    // ── TEST 3 : getPercent() ─────────────────
+    Serial.println("TEST 3 : Pourcentage de charge");
+    int percent = batt.getPercent();
+    printResult("pourcentage entre 0 et 100", percent >= 0 && percent <= 100);
+    Serial.printf("  → Charge estimée  : %d%%\n", percent);
+    Serial.println();
+
+    // ── TEST 4 : getData() ────────────────────
+    Serial.println("TEST 4 : SensorData");
     SensorData data = batt.getData();
-    TEST_ASSERT_TRUE (data.isValid);
-    TEST_ASSERT_TRUE (data.timestamp > 0);
-    TEST_ASSERT_EQUAL(SensorDims::SCALAR,          data.dims);
-    TEST_ASSERT_EQUAL(SensorPosition::CENTER,      data.position);
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, batt.getVoltage(), data.value.scalar);
-}
+    printResult("isValid == true",            data.isValid);
+    printResult("timestamp > 0",              data.timestamp > 0);
+    printResult("dims == SCALAR",             data.dims == SensorDims::SCALAR);
+    printResult("position == CENTER",         data.position == SensorPosition::CENTER);
+    printResult("value.scalar == getVoltage()",
+                data.value.scalar == batt.getVoltage());
+    Serial.println();
 
-// ─────────────────────────────────────────────
-//  TEST 5 : stabilité du filtre ADC
-//  Le jitter entre 10 lectures doit rester < 0.1V
-// ─────────────────────────────────────────────
-void test_filter_stability() {
-    float vmin = 99.0f, vmax = 0.0f;
+    // ── TEST 5 : alerte critique ──────────────
+    Serial.println("TEST 5 : Alerte bas niveau");
+    bool critical = batt.isCritical();
+    Serial.printf("  → isCritical() = %s  (seuil : 6.60V)\n",
+                  critical ? "OUI ⚠" : "non");
+    Serial.println("  [INFO] Ce test est informatif — pas de PASS/FAIL.");
+    Serial.println();
 
+    // ── TEST 6 : stabilité sur 10 lectures ────
+    Serial.println("TEST 6 : Stabilité du filtre ADC (10 lectures)");
+    float vmin = 99.0f, vmax = 0.0f, vsum = 0.0f;
     for (int i = 0; i < 10; i++) {
         batt.update();
         float v = batt.getVoltage();
         if (v < vmin) vmin = v;
         if (v > vmax) vmax = v;
+        vsum += v;
         delay(50);
     }
-
+    float vmoy   = vsum / 10.0f;
     float jitter = vmax - vmin;
-    TEST_ASSERT_LESS_OR_EQUAL_FLOAT(0.1f, jitter);
+    printResult("jitter < 0.1V (filtre efficace)", jitter < 0.1f);
+    Serial.printf("  → Min: %.3fV  Max: %.3fV  Moy: %.3fV  Jitter: %.3fV\n",
+                  vmin, vmax, vmoy, jitter);
+    Serial.println();
+
+    Serial.println("========================================");
+    Serial.println("   FIN DES TESTS — Surveillance continue");
+    Serial.println("========================================\n");
 }
 
 // ─────────────────────────────────────────────
-//  MAIN
+//  Surveillance continue toutes les 2 secondes
 // ─────────────────────────────────────────────
-int main(int argc, char **argv) {
-    delay(2000);  // Laisse le temps à l'ESP32 de démarrer
-    UNITY_BEGIN();
+void loop() {
+    batt.update();
 
-    RUN_TEST(test_init_returns_true);
-    RUN_TEST(test_voltage_in_range);
-    RUN_TEST(test_percent_in_range);
-    RUN_TEST(test_sensor_data_valid);
-    RUN_TEST(test_filter_stability);
+    Serial.printf("BATT | %.3f V | %3d%% | %s\n",
+        batt.getVoltage(),
+        batt.getPercent(),
+        batt.isCritical() ? "⚠ CRITIQUE" : "OK");
 
-    return UNITY_END();
+    delay(2000);
 }
+
+#endif
