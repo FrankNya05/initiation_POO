@@ -13,7 +13,7 @@ namespace RobotConfig {
     constexpr uint8_t LINE_SENSOR_FRONT_LEFT = 32;
     constexpr uint8_t LINE_SENSOR_FRONT_RIGHT = 33;
     constexpr uint8_t LINE_SENSOR_BACK_LEFT = 34;
-    constexpr uint8_t LINE_SENSOR_BACK_RIGHT = 35;
+    constexpr uint8_t LINE_SENSOR_BACK = 35;
     
     // --- Bouton de démarrage ---
     constexpr uint8_t START_BUTTON = 15;

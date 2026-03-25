@@ -5,30 +5,40 @@
 #include "SensorTypes.hpp"
 #ifdef ARDUINO
 #include <Arduino.h>
+#include <stdexcept>
+#include "PinConfig.hpp"
 #endif
 
 class LineSensor : public SensorsInterface {
 private:
-    bool state;
-    SensorType type;
+    SensorData     data;
+    SensorPosition position;
+    uint8_t        pin;
+    static uint8_t positionToPin(SensorPosition pos){
+        switch (pos) {
+            case SensorPosition::LEFT:  return RobotConfig::LINE_SENSOR_FRONT_LEFT;
+            case SensorPosition::RIGHT: return RobotConfig::LINE_SENSOR_FRONT_RIGHT;
+            case SensorPosition::BACK:  return RobotConfig::LINE_SENSOR_BACK;
+            default: return 0;
+        }
+    }
 
 public:
-    LineSensor(SensorType t) : state(false), type(t) {}
-
+    LineSensor(SensorPosition p) :position(p), pin(positionToPin(p)){}
     bool init() override {
-        pinMode(static_cast<uint8_t>(type), INPUT);
+        pinMode(pin, INPUT);
         return true;
     }
 
-    void update() override {
-        state = digitalRead(static_cast<uint8_t>(type));
+    bool update() override {
+        bool detected = digitalRead(pin);
+        data.position = position;
+        data.isValid = true;
+        data.timestamp = millis();
+        return true;
     }
 
-    float getValue() override {
-        return state ? 1.0f : 0.0f;
-    }
-
-    SensorType getType() override {
-        return type;
+    SensorData getData() const override {
+        return data;
     }
 };
