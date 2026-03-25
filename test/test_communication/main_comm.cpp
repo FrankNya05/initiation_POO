@@ -1,14 +1,4 @@
 /*
- * Mini Sumo Robot
- * Application principale de contrôle du véhicule
- * Nombre maximal de lignes: 100
- */
-#ifndef UNIT_TEST
-
-#include <Arduino.h>
-
-
-/*
  * main_example.cpp
  * ----------------
  * Shows how to wire up CommunicationManager in main.cpp.
@@ -75,5 +65,3 @@ void loop() {
         last_send = millis();
     }
 }
-
-#endif
