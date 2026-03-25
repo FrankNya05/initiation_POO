@@ -28,8 +28,8 @@
 // ─────────────────────────────────────────────
 namespace BattConfig {
     // Pont diviseur de tension (valeurs en Ohms)
-    constexpr float R1            = 100000.0f;   // 100 kΩ
-    constexpr float R2            =  47000.0f;   //  47 kΩ
+    constexpr float R1            = 10000.0f;   // 100 kΩ
+    constexpr float R2            =  4700.0f;   //  47 kΩ
     constexpr float DIVIDER_RATIO = (R1 + R2) / R2;  // ≈ 3.128
 
     // Référence ADC ESP32
