@@ -1,199 +1,124 @@
+/*
+ * test_batt_sensor.cpp
+ * -----------------------------------------------
+ * Test hardware du BattSensor sur ESP32 réel
+ *
+ * Ce que ce test vérifie :
+ *  1. init()      — ADC configuré sans crash
+ *  2. update()    — lecture filtrée stable
+ *  3. getVoltage()— tension dans la plage LiPo 2S
+ *  4. getPercent()— pourcentage cohérent (0–100)
+ *  5. isCritical()— alerte bas niveau
+ *  6. getData()   — SensorData bien rempli
+ *
+ * Branchement requis :
+ *  - Pont diviseur R1=100kΩ / R2=47kΩ entre VBAT et GND
+ *  - Point milieu → GPIO 36 (VP)
+ *  - Batterie LiPo 2S connectée
+ *
+ * Lecture dans le Serial Monitor à 115200 baud
+ */
+
+#ifndef UNIT_TEST
+
 #include <Arduino.h>
-#include <WiFi.h>
-#include <PubSubClient.h>
-#include <ArduinoJson.h>
+#include "BattSensor.hpp"
 
-// ============================================
-//              CONFIGURATION
-// ============================================
-const char* ssid        = "S25Ultra";
-const char* password    = "sylvain123";
+// ── Instance globale ──────────────────────────
+BattSensor batt(SensorPosition::CENTER);
 
-const char* mqtt_server = "10.135.195.249";
-const int   mqtt_port   = 1883;
-
-const char* topic_pub = "Sylvain/capteur";
-const char* topic_sub = "Sylvain/commande";
-
-// Deep Sleep — durée en secondes
-#define SLEEP_SEC 5
-#define LED_BUILTIN 2
-// ============================================
-
-WiFiClient espClient;
-PubSubClient client(espClient);
-
-// Compteur qui survit au deep sleep (stocké en RAM RTC)
-RTC_DATA_ATTR int nbEnvois = 0;
-
-// ============================================
-//         CONNEXION WIFI
-// ============================================
-bool connectWifi() {
-  WiFi.begin(ssid, password);
-  Serial.print("🔄 WiFi");
-  int tentatives = 0;
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-    if (++tentatives > 20) {
-      Serial.println("\n❌ WiFi échoué !");
-      return false;
-    }
-  }
-  Serial.println("\n✅ WiFi connecté : " + WiFi.localIP().toString());
-  return true;
+// ── Résultat d'un test ────────────────────────
+void printResult(const char* label, bool passed) {
+    Serial.printf("  [%s] %s\n", passed ? "PASS" : "FAIL", label);
 }
 
-// ============================================
-//         CONNEXION MQTT
-// ============================================
-bool connectMQTT() {
-  client.setServer(mqtt_server, mqtt_port);
-  Serial.print("🔄 MQTT");
-  int tentatives = 0;
-  while (!client.connected()) {
-    if (client.connect("ESP32-Sylva")) {
-      Serial.println("\n✅ MQTT connecté !");
-      client.subscribe(topic_sub);
-      return true;
-    }
-    delay(1000);
-    Serial.print(".");
-    if (++tentatives > 5) {
-      Serial.println("\n❌ MQTT échoué !");
-      return false;
-    }
-  }
-  return true;
-}
-
-// ============================================
-//         CRÉER ET ENVOYER LE JSON
-// ============================================
-void envoyerJSON() {
-  // --- Créer le JSON ---
-  StaticJsonDocument<256> doc;
-
-  // Informations de l'appareil
-  doc["appareil"]    = "ESP32-Sylva";
-  doc["nb_envois"]   = nbEnvois;
-
-  // Données capteurs (remplacez par vos vrais capteurs)
-  doc["temperature"] = 22.5;
-  doc["humidite"]    = 60.0;
-  doc["luminosite"]  = 850;
-
-  // Infos réseau
-  doc["ip"]          = WiFi.localIP().toString();
-  doc["wifi_rssi"]   = WiFi.RSSI();
-  doc["uptime_ms"]   = millis();
-
-  // --- Convertir en char[] ---
-  char jsonBuffer[256];
-  serializeJson(doc, jsonBuffer);
-
-  // --- Publier ---
-  if (client.publish(topic_pub, jsonBuffer)) {
-    Serial.println("📤 JSON envoyé !");
-    Serial.println(jsonBuffer);
-  } else {
-    Serial.println("❌ Échec envoi JSON !");
-  }
-  pinMode(LED_BUILTIN, OUTPUT);
-}
-
-void led2(String commande )
-{
-  if (String(commande) == "ON") {
-  digitalWrite(LED_BUILTIN, HIGH);  // ← Allume
-  Serial.println("💡 LED allumée !");
-} else if (String(commande) == "OFF") {
-  digitalWrite(LED_BUILTIN, LOW);   // ← Éteint
-  Serial.println("💡 LED éteinte !");
-}
-}
-// ============================================
-//         RECEVOIR UN JSON (callback)
-// ============================================
-void callback(char* topic, byte* payload, unsigned int length) {
-  // Reconstruire le message
-  String raw = "";
-  for (int i = 0; i < length; i++) raw += (char)payload[i];
-
-  Serial.println("\n📩 Message reçu sur : " + String(topic));
-  Serial.println("   Contenu brut : " + raw);
-
-  // Parser le JSON
-  StaticJsonDocument<128> doc;
-  DeserializationError err = deserializeJson(doc, raw);
-
-  if (err) {
-    Serial.println("❌ JSON invalide : " + String(err.c_str()));
-    return;
-  }
-
-  // Lire les valeurs
-  const char* commande = doc["commande"] | "inconnu";
-  int         valeur   = doc["valeur"]   | 0;
-
-  Serial.println("   Commande : " + String(commande));
-  Serial.println("   Valeur   : " + String(valeur));
-
-  // Réagir à la commande
-  if (String(commande) == "ON") {
-    Serial.println("💡 LED allumée !");
-  } else if (String(commande) == "OFF") {
-    Serial.println("💡 LED éteinte !");
-  } else if (String(commande) == "SLEEP") {
-    Serial.println("😴 Mise en veille forcée !");
-    ESP.deepSleep(valeur * 1000000);
-  }
-  led2(commande );
-}
-
-// ============================================
-//                  SETUP
-// ============================================
+// ─────────────────────────────────────────────
 void setup() {
-  Serial.begin(115200);
-  delay(500);
+    Serial.begin(115200);
+    delay(1000);
 
-  nbEnvois++;
-  Serial.println("\n==============================");
-  Serial.println("   ESP32 — Réveil #" + String(nbEnvois));
-  Serial.println("==============================");
+    Serial.println("\n========================================");
+    Serial.println("   TEST HARDWARE — BattSensor");
+    Serial.println("========================================\n");
 
-  // Étape 1 — WiFi
-  if (!connectWifi()) {
-    Serial.println("😴 Dodo " + String(SLEEP_SEC) + "s...");
-    ESP.deepSleep(SLEEP_SEC * 1000000ULL);
-  }
+    // ── TEST 1 : init() ───────────────────────
+    Serial.println("TEST 1 : Initialisation");
+    bool initOk = batt.init();
+    printResult("init() retourne true", initOk);
+    Serial.println();
 
-  // Étape 2 — MQTT
-  client.setCallback(callback);
-  if (!connectMQTT()) {
-    Serial.println("😴 Dodo " + String(SLEEP_SEC) + "s...");
-    ESP.deepSleep(SLEEP_SEC * 1000000ULL);
-  }
+    // ── TEST 2 : update() + tension ───────────
+    Serial.println("TEST 2 : Lecture de tension");
+    bool updateOk = batt.update();
+    float voltage = batt.getVoltage();
 
-  // Étape 3 — Envoyer le JSON
-  envoyerJSON();
+    printResult("update() retourne true",  updateOk);
+    printResult("tension >= 6.0V (min LiPo 2S)", voltage >= 6.0f);
+    printResult("tension <= 8.4V (max LiPo 2S)", voltage <= 8.4f);
+    Serial.printf("  → Tension mesurée : %.3f V\n", voltage);
+    Serial.println();
 
-  // Étape 4 — Attendre les messages entrants (2 secondes)
-  Serial.println("👂 Écoute pendant 2s...");
-  long debut = millis();
-  while (millis() - debut < 10000) {
-    client.loop();
-    delay(10);
-  }
+    // ── TEST 3 : getPercent() ─────────────────
+    Serial.println("TEST 3 : Pourcentage de charge");
+    int percent = batt.getPercent();
+    printResult("pourcentage entre 0 et 100", percent >= 0 && percent <= 100);
+    Serial.printf("  → Charge estimée  : %d%%\n", percent);
+    Serial.println();
 
-  // Étape 5 — Deep Sleep
-  Serial.println("😴 Dodo " + String(SLEEP_SEC) + "s...\n");
-  WiFi.disconnect();
-  ESP.deepSleep(SLEEP_SEC * 1000000ULL);
+    // ── TEST 4 : getData() ────────────────────
+    Serial.println("TEST 4 : SensorData");
+    SensorData data = batt.getData();
+    printResult("isValid == true",            data.isValid);
+    printResult("timestamp > 0",              data.timestamp > 0);
+    printResult("dims == SCALAR",             data.dims == SensorDims::SCALAR);
+    printResult("position == CENTER",         data.position == SensorPosition::CENTER);
+    printResult("value.scalar == getVoltage()",
+                data.value.scalar == batt.getVoltage());
+    Serial.println();
+
+    // ── TEST 5 : alerte critique ──────────────
+    Serial.println("TEST 5 : Alerte bas niveau");
+    bool critical = batt.isCritical();
+    Serial.printf("  → isCritical() = %s  (seuil : 6.60V)\n",
+                  critical ? "OUI ⚠" : "non");
+    Serial.println("  [INFO] Ce test est informatif — pas de PASS/FAIL.");
+    Serial.println();
+
+    // ── TEST 6 : stabilité sur 10 lectures ────
+    Serial.println("TEST 6 : Stabilité du filtre ADC (10 lectures)");
+    float vmin = 99.0f, vmax = 0.0f, vsum = 0.0f;
+    for (int i = 0; i < 10; i++) {
+        batt.update();
+        float v = batt.getVoltage();
+        if (v < vmin) vmin = v;
+        if (v > vmax) vmax = v;
+        vsum += v;
+        delay(50);
+    }
+    float vmoy   = vsum / 10.0f;
+    float jitter = vmax - vmin;
+    printResult("jitter < 0.1V (filtre efficace)", jitter < 0.1f);
+    Serial.printf("  → Min: %.3fV  Max: %.3fV  Moy: %.3fV  Jitter: %.3fV\n",
+                  vmin, vmax, vmoy, jitter);
+    Serial.println();
+
+    Serial.println("========================================");
+    Serial.println("   FIN DES TESTS — Surveillance continue");
+    Serial.println("========================================\n");
 }
 
+// ─────────────────────────────────────────────
+//  Surveillance continue toutes les 2 secondes
+// ─────────────────────────────────────────────
 void loop() {
-  // Vide — tout se passe dans setup() avec deep sleep
+    batt.update();
+
+    Serial.printf("BATT | %.3f V | %3d%% | %s\n",
+        batt.getVoltage(),
+        batt.getPercent(),
+        batt.isCritical() ? "⚠ CRITIQUE" : "OK");
+
+    delay(2000);
 }
+
+#endif
