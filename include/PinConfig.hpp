@@ -42,7 +42,7 @@ namespace RobotConfig {
     constexpr uint8_t TOF_SDA = SDA; // Pin digitale/analogue safe
 
     constexpr uint8_t TOF_IIC_ADDR  = 0x09;  // addresse i2c du premier capteur de distance
-
+    constexpr uint8_t TOF_IIC_ADDR1 = 0x0A;
     
     // --- Encodeurs Moteurs (Entrées numériques rapides) ---
     // Déplacés sur des pins "safe" pour éviter les erreurs de boot

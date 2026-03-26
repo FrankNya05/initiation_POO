@@ -13,12 +13,10 @@ void setup() {
     // ── Capteurs de ligne ─────────────────────
     // LineSensor attend un SensorType (pin), pas une SensorPosition
     sensorManager.add(new LineSensor(SensorPosition::BACK), true);
-    sensorManager.add(new LineSensor(SensorPosition::UNKNOWN), true);
-    sensorManager.add(new LineSensor(SensorPosition::RIGHT), true);
 
     // ── TOF avant ────────────────────────────
     // Constructeur : (adresse I2C, position)
-    sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR1, SensorPosition::FRONT), true);
+    sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR, SensorPosition::FRONT), true);
 
     // 
     sensorManager.add(new BattSensor(SensorPosition::CENTER), true);

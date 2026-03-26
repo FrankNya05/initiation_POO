@@ -2,7 +2,7 @@
 #include <vector>
 #include <cstring>
 #include "SensorsInterface.hpp"
-
+#include "RTOSConfig.hpp"
 // ─────────────────────────────────────────────
 //  SensorEntry — wrapper interne
 // ─────────────────────────────────────────────
@@ -51,20 +51,6 @@ public:
         return true;
     }
 
-    // ── Activation / Désactivation ────────────
-
-    /**
-     * Active ou désactive tous les capteurs d'un type donné.
-     * @param typeId  TYPE_ID de la classe concrète (ex: "TOF", "LIDAR", "IMU")
-     * @param state   true = actif, false = inactif
-     */
-    void setEnabled(const char* typeId, bool state) {
-        for (auto& entry : _sensors) {
-            if (strcmp(entry.sensor->getTypeId(), typeId) == 0) {
-                entry.enabled = state;
-            }
-        }
-    }
 
     /**
      * Active ou désactive un capteur à une position donnée.
@@ -88,19 +74,6 @@ public:
         for (auto& entry : _sensors) {
             if (entry.enabled && !entry.sensor->update()) {
                 allOk = false;
-            }
-        }
-        return allOk;
-    }
-
-    /**
-     * Met à jour uniquement les capteurs d'un type donné.
-     */
-    bool updateByType(const char* typeId) {
-        bool allOk = true;
-        for (auto& entry : _sensors) {
-            if (entry.enabled && strcmp(entry.sensor->getTypeId(), typeId) == 0) {
-                if (!entry.sensor->update()) allOk = false;
             }
         }
         return allOk;
@@ -135,29 +108,17 @@ public:
     }
 
     /**
-     * Retourne les données d'un type de capteur spécifique.
-     */
-    std::vector<SensorData> getDataByType(const char* typeId) const {
-        std::vector<SensorData> result;
-        for (const auto& entry : _sensors) {
-            if (strcmp(entry.sensor->getTypeId(), typeId) == 0) {
-                result.push_back(entry.sensor->getData());
-            }
-        }
-        return result;
-    }
-
-    /**
      * Retourne la donnée d'un capteur à une position donnée.
      * @return nullptr si non trouvé ou inactif.
      */
-    const SensorData* getDataByPosition(SensorPosition pos) const {
+// ✅ APRÈS
+    SensorData getDataByPosition(SensorPosition pos) const {
         for (const auto& entry : _sensors) {
             if (entry.enabled && entry.sensor->getData().position == pos) {
-                return &entry.sensor->getData();  // référence stable
+                return entry.sensor->getData();
             }
         }
-        return nullptr;
+        return SensorData{};  // isValid = false par défaut
     }
 
     // ── Debug ─────────────────────────────────
@@ -165,8 +126,7 @@ public:
     void printAll() const {
         for (const auto& entry : _sensors) {
             SensorData d = entry.sensor->getData();
-            Serial.printf("[SensorManager] type=%-6s pos=%d enabled=%d valid=%d val=%.3f ts=%lu\n",
-                entry.sensor->getTypeId(),
+            LOGF("[SensorManager] pos=%d enabled=%d valid=%d val=%.3f ts=%lu\n",
                 (int)d.position,
                 (int)entry.enabled,
                 (int)d.isValid,

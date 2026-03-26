@@ -1,5 +1,5 @@
 #pragma once
-
+#include <Arduino.h> 
 // Dans un header de config
 #define DEBUG_ENABLED  // ← commenter pour désactiver tout
 
@@ -10,3 +10,4 @@
   #define LOG(msg)        // ← remplacé par rien, zéro coût
   #define LOGF(fmt, ...)
 #endif
+constexpr uint8_t TOF_IIC_ADDR  = 0x09;
