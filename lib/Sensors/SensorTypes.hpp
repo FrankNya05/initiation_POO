@@ -58,3 +58,9 @@ struct SensorData {
     bool           isValid   = false;
 };
 
+enum class Event : uint8_t {
+        NONE = 0,
+        SINGLE_PRESS,
+        DOUBLE_PRESS,
+        LONG_PRESS
+    };
