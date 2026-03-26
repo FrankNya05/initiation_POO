@@ -7,7 +7,6 @@ All enumerated sensors for this allpication
 
 #pragma once
 
-
 // Structure envoyée via la queue
 
 
@@ -57,4 +56,6 @@ struct SensorData {
     uint32_t       timestamp = 0;
     bool           isValid   = false;
 };
+
+
 

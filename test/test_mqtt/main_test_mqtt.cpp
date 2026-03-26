@@ -1,11 +1,11 @@
 #include <Arduino.h>
 #include "WiFiComm.hpp"
-#include "RTOSConfig.hpp"
+
 // ── Instanciation ─────────────────────────────────────────────────
 WiFiComm comm(
     "S25Ultra",           // ssid
     "sylvain123",         // password
-    "10.135.195.191",     // broker IP
+    "10.135.195.249",     // broker IP
     1883,                 // port
     "robot/data",         // topic publication
     "robot/commande"      // topic abonnement
@@ -17,19 +17,19 @@ void setup() {
     // ── Enregistre les callbacks AVANT begin() ────────────────────
 
     comm.onConnect([]() {
-        LOG("✅ Connecté au broker Mosquitto !");
+        Serial.println("✅ Connecté au broker Mosquitto !");
     });
 
     comm.onDisconnect([]() {
-        LOG("❌ Connexion perdue !");
+        Serial.println("❌ Connexion perdue !");
     });
 
     comm.onReceive([](const std::string& msg) {
-        LOGF("📩 Message reçu : %s\n", msg.c_str());
+        Serial.printf("📩 Message reçu : %s\n", msg.c_str());
 
         // Exemple — réagir à une commande
-        if (msg == "STOP")  LOG("🛑 Robot arrêté !");
-        if (msg == "START") LOG("🚀 Robot démarré !");
+        if (msg == "STOP")  Serial.println("🛑 Robot arrêté !");
+        if (msg == "START") Serial.println("🚀 Robot démarré !");
     });
 
     // ── Démarre la connexion ──────────────────────────────────────
