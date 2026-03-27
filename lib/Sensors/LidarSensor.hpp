@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────
 //  YDLIDAR Tmini Plus — Ultra Stable FreeRTOS Ready
 // ─────────────────────────────────────────────
+
 namespace LidarProtocol {
     constexpr uint8_t  HEADER_1   = 0xAA;
     constexpr uint8_t  HEADER_2   = 0x55;

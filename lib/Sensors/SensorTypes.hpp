@@ -56,6 +56,3 @@ struct SensorData {
     uint32_t       timestamp = 0;
     bool           isValid   = false;
 };
-
-
-
