@@ -1,0 +1,36 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "PlatformIO: Serial Monitor",
+      "runtimeExecutable": "pio",
+      "runtimeArgs": ["device", "monitor", "--port", "COM5", "--baud", "115200"],
+      "port": 8080,
+      "autoPort": true
+    },
+    {
+      "name": "PlatformIO: Build & Upload",
+      "runtimeExecutable": "pio",
+      "runtimeArgs": ["run", "--target", "upload", "--environment", "esp32dev"],
+      "port": 0
+    },
+    {
+      "name": "PlatformIO: Build Only",
+      "runtimeExecutable": "pio",
+      "runtimeArgs": ["run", "--environment", "esp32dev"],
+      "port": 0
+    },
+    {
+      "name": "PlatformIO: Run Tests",
+      "runtimeExecutable": "pio",
+      "runtimeArgs": ["test", "--environment", "esp32dev"],
+      "port": 0
+    },
+    {
+      "name": "Wokwi Simulator",
+      "runtimeExecutable": "wokwi-cli",
+      "runtimeArgs": ["--timeout", "0", "."],
+      "port": 9012
+    }
+  ]
+}
