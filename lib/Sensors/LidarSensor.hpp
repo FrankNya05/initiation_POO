@@ -153,6 +153,11 @@ private:
 
     SensorData _data;
 
+    // ── Diagnostics checksum ──────────────────────
+    uint32_t _csOkCount  = 0;
+    uint32_t _csErrCount = 0;
+    uint32_t _lastStatMs = 0;
+
     // ─────────────────────────────────────────────
     //  Non-blocking startup (FreeRTOS safe)
     // ─────────────────────────────────────────────
@@ -299,17 +304,36 @@ private:
     // ─────────────────────────────────────────────
     void _resetScan() {
 
-        _nearestDist = LidarProtocol::MAX_DIST_M;
-        _nearestAngle = 0;
-        _validPoints = 0;
+        _nearestDist   = LidarProtocol::MAX_DIST_M;
+        _nearestAngle  = 0;
+        _filteredDist  = LidarProtocol::MAX_DIST_M;
+        _filteredAngle = 0;
+        _validPoints   = 0;
     }
 
     // ─────────────────────────────────────────────
     void _parsePacket() {
 
         if (_checksum != _cs) {
+            _csErrCount++;
+            LOGF("[Lidar] CS FAIL  computed=0x%04X  received=0x%04X  delta=0x%04X\n",
+                 _checksum, _cs, (uint16_t)(_checksum ^ _cs));
             _state = State::WAIT_HEADER_1;
             return;
+        }
+
+        _csOkCount++;
+
+        // Rapport toutes les 5 secondes
+        uint32_t nowStat = millis();
+        if (nowStat - _lastStatMs >= 5000UL) {
+            uint32_t total = _csOkCount + _csErrCount;
+            LOGF("[Lidar] CS stats  OK=%lu  ERR=%lu  taux=%lu%%\n",
+                 _csOkCount, _csErrCount,
+                 total ? (_csErrCount * 100UL / total) : 0UL);
+            _csOkCount  = 0;
+            _csErrCount = 0;
+            _lastStatMs = nowStat;
         }
 
         uint32_t now = millis();
@@ -360,10 +384,22 @@ private:
 
         _validPoints = min(_validPoints, 250);
 
-        _filteredDist = 0.7f * _filteredDist + 0.3f * _nearestDist;
-        _filteredAngle = 0.7f * _filteredAngle + 0.3f * _nearestAngle;
+        // Fix 3 : EMA uniquement si des points valides ont été trouvés
+        if (_validPoints > 0) {
 
-        _nearestDist = _filteredDist;
-        _nearestAngle = _filteredAngle;
+            // Fix 2 : EMA distance (linéaire, pas de problème circulaire)
+            _filteredDist = 0.7f * _filteredDist + 0.3f * _nearestDist;
+
+            // Fix 2 : EMA angle circulaire — évite le bug autour de 0°/360°
+            float diff = _nearestAngle - _filteredAngle;
+            if (diff >  180.0f) diff -= 360.0f;
+            if (diff < -180.0f) diff += 360.0f;
+            _filteredAngle += 0.3f * diff;
+            if (_filteredAngle <   0.0f) _filteredAngle += 360.0f;
+            if (_filteredAngle >= 360.0f) _filteredAngle -= 360.0f;
+
+            _nearestDist  = _filteredDist;
+            _nearestAngle = _filteredAngle;
+        }
     }
 }; // end class LidarSensor
