@@ -1,0 +1,71 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:RobotHMI.ViewModels"
+        xmlns:panels="clr-namespace:RobotHMI.Views.Panels"
+        x:Class="RobotHMI.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Mini-Sumo Robot HMI"
+        Width="800" Height="480"
+        Background="#181825">
+
+    <!--
+        MainWindow — Phase 1
+        ════════════════════
+        Layout for the first development phase.
+        Only the ConnectionPanel is present.
+
+        Each future phase adds a new panel here with zero changes
+        to the panels already in place:
+
+          Phase 2: add <panels:TelemetryPanelView ... />
+          Phase 3: add <panels:ControlPanelView   ... />
+          Phase 4: add <panels:StatusBarView       ... />
+
+        The outer DockPanel gives us a flexible slot-based layout:
+          - ConnectionPanel docks to the Top
+          - (future) StatusBar docks to the Bottom
+          - (future) ControlPanel docks to the Left
+          - (future) TelemetryPanel fills the remaining center space
+    -->
+
+    <DockPanel LastChildFill="True">
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- TOP — Connection panel (always visible)                         -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+
+        <panels:ConnectionPanelView
+            DockPanel.Dock="Top"
+            DataContext="{Binding ConnectionPanel}"
+            Margin="8,8,8,4"/>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- CENTER — Placeholder for future panels                          -->
+        <!-- Remove this block when TelemetryPanel and ControlPanel arrive.  -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+
+        <Border Background="#11111B"
+                CornerRadius="8"
+                Margin="8,4,8,8">
+            <StackPanel VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Spacing="8">
+                <TextBlock Text="Mini-Sumo Robot HMI"
+                           Foreground="#6C7086"
+                           FontSize="22"
+                           FontWeight="Bold"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="Phase 1 — Connection only"
+                           Foreground="#45475A"
+                           FontSize="14"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="Telemetry and control panels coming in later phases."
+                           Foreground="#45475A"
+                           FontSize="12"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+    </DockPanel>
+
+</Window>
