@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using RobotHMI.Services;
 using RobotHMI.ViewModels;
 using RobotHMI.Views;
+using Avalonia.Markup.Xaml;
 
 namespace RobotHMI;
 
@@ -43,9 +44,15 @@ public partial class App : Application
             // All ViewModels that need to communicate receive this same instance.
             var commService = new RobotCommunicationService();
 
-            // MessageRouter will be wired here in Phase 2:
-            // var router = new MessageRouter();
-            // commService.MessageReceived += (_, msg) => router.Route(msg);
+            // ----------------------------------------------------------------
+            // Phase 2 — Wire the MessageRouter
+            // ----------------------------------------------------------------
+            // MessageRouter sits between RobotCommunicationService and the
+            // ViewModels. It receives every raw JSON string and dispatches it
+            // to the handler registered for its "type" field.
+            // It never parses payloads — that is the job of TelemetryParser.
+            var router = new MessageRouter();
+            commService.MessageReceived += (_, msg) => router.Route(msg);
 
             // ----------------------------------------------------------------
             // Phase 1 — Create root ViewModel
@@ -54,10 +61,13 @@ public partial class App : Application
             var mainWindowViewModel = new MainWindowViewModel(commService);
 
             // ----------------------------------------------------------------
-            // Phase 2 — Register telemetry handler (uncomment in Phase 2)
+            // Phase 2 — Register telemetry handlers
             // ----------------------------------------------------------------
-            // router.Register("TELEMETRY", mainWindowViewModel.TelemetryPanel.OnTelemetryReceived);
-            // router.Register("STATE",     mainWindowViewModel.TelemetryPanel.OnStateReceived);
+            // These two lines connect the router to TelemetryPanelViewModel.
+            // When the router sees type == "TELEMETRY" it calls OnTelemetryReceived.
+            // When it sees type == "STATE"     it calls OnStateReceived.
+            router.Register("TELEMETRY", mainWindowViewModel.TelemetryPanel.OnTelemetryReceived);
+            router.Register("STATE",     mainWindowViewModel.TelemetryPanel.OnStateReceived);
 
             // ----------------------------------------------------------------
             // Phase 3 — Register ACK handler (uncomment in Phase 3)

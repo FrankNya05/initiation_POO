@@ -9,29 +9,23 @@
         Background="#181825">
 
     <!--
-        MainWindow — Phase 1
+        MainWindow — Phase 2
         ════════════════════
-        Layout for the first development phase.
-        Only the ConnectionPanel is present.
+        ConnectionPanel docks to the Top (unchanged from Phase 1).
+        TelemetryPanel fills the remaining space on the right.
 
-        Each future phase adds a new panel here with zero changes
-        to the panels already in place:
+        Phase 3 will add ControlPanel docked to the Left.
+        Phase 4 will add StatusBar docked to the Bottom.
 
-          Phase 2: add <panels:TelemetryPanelView ... />
-          Phase 3: add <panels:ControlPanelView   ... />
-          Phase 4: add <panels:StatusBarView       ... />
-
-        The outer DockPanel gives us a flexible slot-based layout:
-          - ConnectionPanel docks to the Top
-          - (future) StatusBar docks to the Bottom
-          - (future) ControlPanel docks to the Left
-          - (future) TelemetryPanel fills the remaining center space
+        The DockPanel layout:
+          Top    → ConnectionPanel
+          Fill   → TelemetryPanel (right column for now; Phase 3 splits it)
     -->
 
     <DockPanel LastChildFill="True">
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- TOP — Connection panel (always visible)                         -->
+        <!-- TOP — Connection panel (unchanged from Phase 1)                 -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
 
         <panels:ConnectionPanelView
@@ -40,31 +34,13 @@
             Margin="8,8,8,4"/>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- CENTER — Placeholder for future panels                          -->
-        <!-- Remove this block when TelemetryPanel and ControlPanel arrive.  -->
+        <!-- FILL — Telemetry panel (added in Phase 2)                       -->
+        <!-- Phase 3: this moves to the Right slot; ControlPanel takes Left. -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
 
-        <Border Background="#11111B"
-                CornerRadius="8"
-                Margin="8,4,8,8">
-            <StackPanel VerticalAlignment="Center"
-                        HorizontalAlignment="Center"
-                        Spacing="8">
-                <TextBlock Text="Mini-Sumo Robot HMI"
-                           Foreground="#6C7086"
-                           FontSize="22"
-                           FontWeight="Bold"
-                           HorizontalAlignment="Center"/>
-                <TextBlock Text="Phase 1 — Connection only"
-                           Foreground="#45475A"
-                           FontSize="14"
-                           HorizontalAlignment="Center"/>
-                <TextBlock Text="Telemetry and control panels coming in later phases."
-                           Foreground="#45475A"
-                           FontSize="12"
-                           HorizontalAlignment="Center"/>
-            </StackPanel>
-        </Border>
+        <panels:TelemetryPanelView
+            DataContext="{Binding TelemetryPanel}"
+            Margin="8,4,8,8"/>
 
     </DockPanel>
 

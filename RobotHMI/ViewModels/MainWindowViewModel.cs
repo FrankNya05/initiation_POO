@@ -30,7 +30,13 @@ public class MainWindowViewModel : ViewModelBase
     /// </summary>
     public ConnectionPanelViewModel ConnectionPanel { get; }
 
-    // Phase 2: public TelemetryPanelViewModel TelemetryPanel { get; }
+    /// <summary>
+    /// ViewModel for the telemetry panel (sensor values, robot state).
+    /// Bound to TelemetryPanelView in MainWindow.axaml.
+    /// Added in Phase 2.
+    /// </summary>
+    public TelemetryPanelViewModel TelemetryPanel { get; }
+
     // Phase 3: public ControlPanelViewModel   ControlPanel   { get; }
     // Phase 4: public StatusBarViewModel      StatusBar      { get; }
 
@@ -43,5 +49,9 @@ public class MainWindowViewModel : ViewModelBase
         // Pass the shared service instance to each child ViewModel that needs it.
         // All VMs share the same service — one connection for the whole app.
         ConnectionPanel = new ConnectionPanelViewModel(commService);
+
+        // TelemetryPanelViewModel has no dependency on commService directly —
+        // it receives parsed data via MessageRouter handler callbacks (App.axaml.cs).
+        TelemetryPanel = new TelemetryPanelViewModel();
     }
 }
