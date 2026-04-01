@@ -3,7 +3,6 @@ using Avalonia.Controls.ApplicationLifetimes;
 using RobotHMI.Services;
 using RobotHMI.ViewModels;
 using RobotHMI.Views;
-using Avalonia.Markup.Xaml;
 
 namespace RobotHMI;
 
