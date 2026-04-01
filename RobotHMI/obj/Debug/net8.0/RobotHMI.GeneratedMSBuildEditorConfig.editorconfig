@@ -22,11 +22,17 @@ build_property.EnableGeneratedComInterfaceComImportInterop =
 [C:/GEI_1076_Labs/initiation_POO/RobotHMI/App.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[C:/GEI_1076_Labs/initiation_POO/RobotHMI/ViewModels/Panels/TelemetryPanelView.axaml]
-build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
-
 [C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/ConnectionPanelView.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
 [C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/MainWindow.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/ControlPanelView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/StatusBarView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/TelemetryPanelView.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml

@@ -9,23 +9,28 @@
         Background="#181825">
 
     <!--
-        MainWindow — Phase 2
-        ════════════════════
-        ConnectionPanel docks to the Top (unchanged from Phase 1).
-        TelemetryPanel fills the remaining space on the right.
+        MainWindow — Phase 4 (V1 complete)
+        ═══════════════════════════════════
+        Final DockPanel slot assignment:
 
-        Phase 3 will add ControlPanel docked to the Left.
-        Phase 4 will add StatusBar docked to the Bottom.
+          Top    → ConnectionPanel   (Phase 1, unchanged)
+          Bottom → StatusBar         (Phase 4, added here)
+          Left   → ControlPanel      (Phase 3, unchanged)
+          Fill   → TelemetryPanel    (Phase 2, unchanged)
 
-        The DockPanel layout:
-          Top    → ConnectionPanel
-          Fill   → TelemetryPanel (right column for now; Phase 3 splits it)
+        Declaration order matters for DockPanel:
+          1. Top-docked panels must come before Bottom-docked panels.
+          2. Left/Right panels come after Top/Bottom.
+          3. The fill child (no Dock attribute) must be declared last.
+
+        "LastChildFill=True" means TelemetryPanel takes all remaining space
+        after ConnectionPanel, StatusBar, and ControlPanel have claimed theirs.
     -->
 
     <DockPanel LastChildFill="True">
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- TOP — Connection panel (unchanged from Phase 1)                 -->
+        <!-- TOP — Connection panel (Phase 1, unchanged)                      -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
 
         <panels:ConnectionPanelView
@@ -34,13 +39,32 @@
             Margin="8,8,8,4"/>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- FILL — Telemetry panel (added in Phase 2)                       -->
-        <!-- Phase 3: this moves to the Right slot; ControlPanel takes Left. -->
+        <!-- BOTTOM — Status bar (Phase 4)                                    -->
+        <!-- Must be declared before Left/Fill children so DockPanel         -->
+        <!-- allocates its height before splitting the remaining width.       -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+
+        <panels:StatusBarView
+            DockPanel.Dock="Bottom"
+            DataContext="{Binding StatusBar}"
+            Margin="8,4,8,8"/>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- LEFT — Control panel (Phase 3, unchanged)                        -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+
+        <panels:ControlPanelView
+            DockPanel.Dock="Left"
+            DataContext="{Binding ControlPanel}"
+            Margin="8,4,4,4"/>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- FILL — Telemetry panel (Phase 2, unchanged)                      -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
 
         <panels:TelemetryPanelView
             DataContext="{Binding TelemetryPanel}"
-            Margin="8,4,8,8"/>
+            Margin="4,4,8,4"/>
 
     </DockPanel>
 

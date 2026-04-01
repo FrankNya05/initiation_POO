@@ -67,18 +67,29 @@ public partial class App : Application
             // When the router sees type == "TELEMETRY" it calls OnTelemetryReceived.
             // When it sees type == "STATE"     it calls OnStateReceived.
             router.Register("TELEMETRY", mainWindowViewModel.TelemetryPanel.OnTelemetryReceived);
-            router.Register("STATE",     mainWindowViewModel.TelemetryPanel.OnStateReceived);
+
+            // STATE is handled by a combined lambda (registered below in Phase 4)
+            // so both TelemetryPanel and StatusBar receive it from one registration.
 
             // ----------------------------------------------------------------
-            // Phase 3 — Register ACK handler (uncomment in Phase 3)
+            // Phase 3 — Register ACK handler
             // ----------------------------------------------------------------
-            // router.Register("ACK", mainWindowViewModel.ControlPanel.OnAckReceived);
+            // Routes ACK messages from the robot to ControlPanelViewModel.
+            // ACK format: { "type": "ACK", "payload": "FORWARD" }
+            router.Register("ACK", mainWindowViewModel.ControlPanel.OnAckReceived);
 
             // ----------------------------------------------------------------
-            // Phase 4 — Register log and state handlers (uncomment in Phase 4)
+            // Phase 4 — Register LOG and STATE handlers
             // ----------------------------------------------------------------
-            // router.Register("LOG",   mainWindowViewModel.StatusBar.OnLogReceived);
-            // router.Register("STATE", mainWindowViewModel.StatusBar.OnStateReceived);
+            // LOG  → StatusBarViewModel  (recent-log list)
+            // STATE is a combined lambda so both TelemetryPanel and StatusBar
+            // receive every STATE message through a single router entry.
+            router.Register("LOG", mainWindowViewModel.StatusBar.OnLogReceived);
+            router.Register("STATE", rawJson =>
+            {
+                mainWindowViewModel.TelemetryPanel.OnStateReceived(rawJson);
+                mainWindowViewModel.StatusBar.OnStateReceived(rawJson);
+            });
 
             // ----------------------------------------------------------------
             // Show the main window

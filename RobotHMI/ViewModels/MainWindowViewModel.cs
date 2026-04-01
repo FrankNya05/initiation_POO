@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using RobotHMI.Services;
 
 namespace RobotHMI.ViewModels;
@@ -6,16 +7,21 @@ namespace RobotHMI.ViewModels;
 // MainWindowViewModel
 // ---------------------------------------------------------------------------
 // The root ViewModel for the application window.
-// Its only job in Phase 1 is to hold the child ViewModels and expose them
-// as properties so the Views can bind to them.
+// Holds all child ViewModels and exposes them as properties so Views can bind.
 //
-// Phase 1: holds ConnectionPanelViewModel only.
-// Phase 2: TelemetryPanelViewModel will be added here.
-// Phase 3: ControlPanelViewModel will be added here.
-// Phase 4: StatusBarViewModel will be added here.
+// Phase 1: ConnectionPanelViewModel
+// Phase 2: TelemetryPanelViewModel  (added)
+// Phase 3: ControlPanelViewModel    (added)
+// Phase 4: StatusBarViewModel       (added)
 //
-// The pattern is always the same: add a new property, instantiate the VM
-// in the constructor, done. No existing code changes.
+// Connection-state forwarding:
+//   MainWindowViewModel subscribes to ConnectionPanel.PropertyChanged and
+//   forwards relevant values to child VMs that need them:
+//     - ControlPanel.IsConnected     (Phase 3)
+//     - StatusBar.IsConnected        (Phase 4)
+//     - StatusBar.ActiveProtocol     (Phase 4)
+//   This keeps all cross-VM wiring in one place using only the
+//   INotifyPropertyChanged mechanism already present in the codebase.
 // ---------------------------------------------------------------------------
 
 public class MainWindowViewModel : ViewModelBase
@@ -37,8 +43,19 @@ public class MainWindowViewModel : ViewModelBase
     /// </summary>
     public TelemetryPanelViewModel TelemetryPanel { get; }
 
-    // Phase 3: public ControlPanelViewModel   ControlPanel   { get; }
-    // Phase 4: public StatusBarViewModel      StatusBar      { get; }
+    /// <summary>
+    /// ViewModel for the control panel (direction buttons, speed slider).
+    /// Bound to ControlPanelView in MainWindow.axaml.
+    /// Added in Phase 3.
+    /// </summary>
+    public ControlPanelViewModel ControlPanel { get; }
+
+    /// <summary>
+    /// ViewModel for the status bar (connection badge, protocol, robot state, logs).
+    /// Bound to StatusBarView in MainWindow.axaml.
+    /// Added in Phase 4.
+    /// </summary>
+    public StatusBarViewModel StatusBar { get; }
 
     // -----------------------------------------------------------------------
     // Constructor
@@ -46,12 +63,48 @@ public class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel(RobotCommunicationService commService)
     {
-        // Pass the shared service instance to each child ViewModel that needs it.
-        // All VMs share the same service — one connection for the whole app.
+        // All VMs that need to send or receive share the same service instance.
         ConnectionPanel = new ConnectionPanelViewModel(commService);
 
-        // TelemetryPanelViewModel has no dependency on commService directly —
-        // it receives parsed data via MessageRouter handler callbacks (App.axaml.cs).
+        // TelemetryPanelViewModel receives data via MessageRouter callbacks —
+        // no direct dependency on commService.
         TelemetryPanel = new TelemetryPanelViewModel();
+
+        // ControlPanelViewModel needs commService to call SendAsync.
+        ControlPanel = new ControlPanelViewModel(commService);
+
+        // StatusBarViewModel receives data via MessageRouter callbacks and
+        // connection-state forwarding — no direct dependency on commService.
+        StatusBar = new StatusBarViewModel();
+
+        // Forward connection state changes from ConnectionPanel to the VMs
+        // that need them. A single subscription handles all forwarding so
+        // the logic stays in one place.
+        ConnectionPanel.PropertyChanged += OnConnectionPanelPropertyChanged;
+
+        // Initialise the status bar with the current protocol selection so
+        // it displays correctly before any connection is made.
+        StatusBar.ActiveProtocol = ConnectionPanel.SelectedProtocol;
+    }
+
+    // -----------------------------------------------------------------------
+    // Connection-state forwarding
+    // -----------------------------------------------------------------------
+
+    private void OnConnectionPanelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            // IsConnected changed — update both ControlPanel and StatusBar.
+            case nameof(ConnectionPanelViewModel.IsConnected):
+                ControlPanel.IsConnected = ConnectionPanel.IsConnected;
+                StatusBar.IsConnected    = ConnectionPanel.IsConnected;
+                break;
+
+            // SelectedProtocol changed — update the StatusBar badge.
+            case nameof(ConnectionPanelViewModel.SelectedProtocol):
+                StatusBar.ActiveProtocol = ConnectionPanel.SelectedProtocol;
+                break;
+        }
     }
 }
