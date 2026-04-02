@@ -26,8 +26,8 @@ namespace RobotConfig {
 
     // --- UART pour le LIDAR ---
     // Utilise les ports série matériels stables (UART2)
-    constexpr uint8_t RX_LIDAR = 16;
-    constexpr uint8_t TX_LIDAR = 17;
+    constexpr uint8_t RX_LIDAR = 17;
+    constexpr uint8_t TX_LIDAR = 16;
     
     // --- Capteur Batterie (ADC1) ---
     // INDISPENSABLE pour fonctionner avec le Bluetooth/Wi-Fi
