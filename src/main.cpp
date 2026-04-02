@@ -2,166 +2,161 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
-#include <freertos/queue.h>
 
-#include "WiFiComm.hpp"
 #include "RTOSConfig.hpp"
 #include "SensorManger.hpp"
-#include "LineSensor.hpp"
-#include "IRSensor.hpp"
-#include "PinConfig.hpp"
 #include "BattSensor.hpp"
-#include <ArduinoJson.h>
 
 // ═══════════════════════════════════════════════════════════════
-//  Globals partagés entre tâches
+//  LEÇON FREERTOS — Code minimal
+//
+//  Concept appris ici :
+//  1. Créer une tâche avec xTaskCreatePinnedToCore
+//  2. Boucle périodique avec vTaskDelayUntil
+//  3. Partager des données entre tâches avec un mutex
+//  4. LOG thread-safe
+//
+//  2 tâches seulement :
+//  ┌─────────────────┐     ┌─────────────────┐
+//  │  taskSensors    │     │  taskBlink      │
+//  │  Core 1 / P2    │     │  Core 1 / P1    │
+//  │  toutes 500 ms  │     │  toutes 1000 ms │
+//  │  lit batterie   │     │  clignote LED   │
+//  │  LOG résultat   │     │  prouve que les │
+//  └─────────────────┘     │  tâches tournent│
+//                          │  en parallèle   │
+//                          └─────────────────┘
 // ═══════════════════════════════════════════════════════════════
 
-// Mutex Serial — requis par les macros LOG / LOGF
+// ── Mutex Serial — DOIT être créé avant tout LOG() ────────────
 SemaphoreHandle_t g_logMutex = nullptr;
 
-// Objets principaux
-WiFiComm comm(
-    "S25Ultra",           // ssid
-    "sylvain123",         // password
-    "10.135.195.249",     // broker IP
-    1883,                 // port
-    "robot/data",         // topic publication
-    "robot/commande"      // topic abonnement
-);
+// ── SensorManager — partagé entre tâches ──────────────────────
 SensorManager sensorManager;
 
-// ═══════════════════════════════════════════════════════════════
-//  Utilitaires
-// ═══════════════════════════════════════════════════════════════
-
-std::string serializeSensorData(const SensorData& data) {
-    StaticJsonDocument<256> doc;
-    doc["ts"]    = data.timestamp;
-    doc["pos"]   = (int)data.position;
-    doc["valid"] = data.isValid;
-    if (data.dims == SensorDims::VEC3) {
-        JsonObject val = doc.createNestedObject("val");
-        val["x"] = round(data.value.vector.x * 1000) / 1000.0;  // distance
-        val["y"] = round(data.value.vector.y * 10)   / 10.0;     // angle
-        val["z"] = (int)data.value.vector.z;                      // nb points
-    } else {
-        doc["val"] = round(data.value.scalar * 1000) / 1000.0;
-    }
-    std::string output;
-    serializeJson(doc, output);
-    return output;
-}
+// ── LED embarquée ESP32 ───────────────────────────────────────
+static constexpr uint8_t LED_PIN = 2;
 
 // ═══════════════════════════════════════════════════════════════
-//  Tâches FreeRTOS
+//  TÂCHE 1 — taskSensors
+//
+//  Ce qu'elle fait :
+//  → Lit la batterie toutes les 500 ms
+//  → Affiche la tension dans le moniteur série
+//
+//  Ce qu'on apprend :
+//  → vTaskDelayUntil  : pause précise sans dérive
+//  → SensorManager    : accès thread-safe via mutex interne
 // ═══════════════════════════════════════════════════════════════
-
-// ── taskSensors ───────────────────────────────────────────────
-//  Core 1 | Priorité 3 | Période 20 ms
-//  Met à jour tous les capteurs enregistrés dans SensorManager.
 void taskSensors(void* /*pv*/) {
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    for (;;) {
-        sensorManager.updateAll();
-        vTaskDelayUntil(&xLastWakeTime, RTOSConfig::PERIOD_SENSORS);
-    }
-}
 
-// ── taskComm ──────────────────────────────────────────────────
-//  Core 0 | Priorité 1 | Période 100 ms
-//  Gère la boucle WiFi/MQTT et publie les données capteurs.
-void taskComm(void* /*pv*/) {
+    // xLastWakeTime mémorise l'heure du dernier réveil
+    // → vTaskDelayUntil calcule exactement quand se réveiller
+    // → la tâche tourne EXACTEMENT toutes les 500 ms, même si
+    //   le travail à l'intérieur prend un peu de temps
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    for (;;) {
-        comm.loop();
 
-        // Publie les données batterie si connecté
+    for (;;) {
+
+        // ── Lecture batterie (thread-safe via mutex interne) ──
         SensorData batt = sensorManager.getDataByPosition(SensorPosition::CENTER);
-        if (batt.isValid && comm.isConnected()) {
-            comm.send(serializeSensorData(batt));
+
+        // ── Affichage ─────────────────────────────────────────
+        if (batt.isValid) {
+            LOGF("[Sensors] Batterie : %.2f V\n", batt.value.scalar);
+        } else {
+            LOG("[Sensors] Batterie : donnée invalide");
         }
 
-        vTaskDelayUntil(&xLastWakeTime, RTOSConfig::PERIOD_COMM);
-    }
-}
-
-// ── taskStrategy — placeholder ────────────────────────────────
-//  Core 1 | Priorité 2 | Période 50 ms
-//  Logique sumo : sera implémentée à l'étape 5.
-void taskStrategy(void* /*pv*/) {
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    for (;;) {
-        // TODO étape 5 — chercher adversaire, foncer, éviter bord
-        vTaskDelayUntil(&xLastWakeTime, RTOSConfig::PERIOD_STRATEGY);
+        // ── Pause précise de 500 ms ───────────────────────────
+        // vTaskDelayUntil est MIEUX que vTaskDelay(500) car :
+        // vTaskDelay(500)      → 500 ms APRES la fin du travail
+        // vTaskDelayUntil(500) → 500 ms DEPUIS le début (période fixe)
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(500));
     }
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  setup() — init + création des tâches
+//  TÂCHE 2 — taskBlink
+//
+//  Ce qu'elle fait :
+//  → Fait clignoter la LED embarquée toutes les secondes
+//
+//  Ce qu'on apprend :
+//  → 2 tâches tournent vraiment en parallèle
+//  → si taskSensors était bloquée (ex: delay()), taskBlink
+//    continuerait quand même de clignoter → preuve du parallélisme
+// ═══════════════════════════════════════════════════════════════
+void taskBlink(void* /*pv*/) {
+
+    pinMode(LED_PIN, OUTPUT);
+
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    for (;;) {
+        digitalWrite(LED_PIN, HIGH);
+        vTaskDelay(pdMS_TO_TICKS(100));   // LED allumée 100 ms
+
+        digitalWrite(LED_PIN, LOW);
+
+        LOG("[Blink] LED clignote — les 2 tâches tournent en parallèle ✅");
+
+        // Attend le prochain cycle d'1 seconde
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1000));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  setup() — point d'entrée
 // ═══════════════════════════════════════════════════════════════
 void setup() {
     Serial.begin(115200);
 
-    // Mutex Serial — DOIT être créé avant tout LOG
+    // ── ÉTAPE 1 : créer le mutex Serial AVANT tout LOG ────────
     g_logMutex = xSemaphoreCreateMutex();
+    LOG("=== Mini Sumo — boot FreeRTOS minimal ===");
 
-    LOG("=== Mini Sumo — boot ===");
-
-    // ── Capteurs ──────────────────────────────────────────────
+    // ── ÉTAPE 2 : enregistrer et initialiser les capteurs ─────
     sensorManager.add(new BattSensor(SensorPosition::CENTER), true);
 
     if (!sensorManager.initAll()) {
-        LOG("[setup] ERREUR : init capteurs échouée !");
+        LOG("[setup] ERREUR init capteurs !");
     } else {
-        LOG("[setup] Capteurs initialisés.");
+        LOG("[setup] BattSensor prêt.");
     }
 
-    // ── WiFi / MQTT callbacks ─────────────────────────────────
-    comm.onConnect([]() {
-        LOG("✅ Connecté au broker Mosquitto !");
-    });
+    // ── ÉTAPE 3 : créer les tâches ────────────────────────────
+    //
+    //  xTaskCreatePinnedToCore(
+    //      fonction,    ← la tâche à exécuter
+    //      "nom",       ← pour le débogage
+    //      stack,       ← RAM réservée (bytes)
+    //      paramètre,   ← passé à void* pv (nullptr ici)
+    //      priorité,    ← 0=basse, 24=haute
+    //      handle,      ← pour contrôler la tâche après (nullptr = on garde pas)
+    //      core         ← 0 ou 1
+    //  );
 
-    comm.onDisconnect([]() {
-        LOG("❌ Connexion perdue !");
-    });
-
-    comm.onReceive([](const std::string& msg) {
-        LOGF("📩 Message reçu : %s\n", msg.c_str());
-        if (msg == "STOP")  LOG("🛑 Robot arrêté !");
-        if (msg == "START") LOG("🚀 Robot démarré !");
-    });
-
-    comm.begin();
-
-    // ── Création des tâches ───────────────────────────────────
     xTaskCreatePinnedToCore(
         taskSensors, "Sensors",
-        RTOSConfig::STACK_SENSORS, nullptr,
-        RTOSConfig::PRIO_SENSORS,  nullptr,
-        RTOSConfig::CORE_SENSORS
+        2048, nullptr, 2, nullptr, 1
     );
 
     xTaskCreatePinnedToCore(
-        taskComm, "Comm",
-        RTOSConfig::STACK_COMM,  nullptr,
-        RTOSConfig::PRIO_COMM,   nullptr,
-        RTOSConfig::CORE_COMM
+        taskBlink, "Blink",
+        1024, nullptr, 1, nullptr, 1
     );
 
-    xTaskCreatePinnedToCore(
-        taskStrategy, "Strategy",
-        RTOSConfig::STACK_STRATEGY, nullptr,
-        RTOSConfig::PRIO_STRATEGY,  nullptr,
-        RTOSConfig::CORE_STRATEGY
-    );
-
-    LOG("[setup] Tâches démarrées.");
+    LOG("[setup] 2 tâches démarrées — observe le moniteur série !");
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  loop() — inutilisé (toute la logique est dans les tâches)
+//  loop() — supprimée
+//
+//  Avec FreeRTOS, loop() est elle-même une tâche Arduino.
+//  On la supprime pour libérer ses ressources.
+//  vTaskDelete(nullptr) = "supprime la tâche courante"
 // ═══════════════════════════════════════════════════════════════
 void loop() {
-    vTaskDelete(nullptr);  // supprime la tâche loop() d'Arduino
+    vTaskDelete(nullptr);
 }

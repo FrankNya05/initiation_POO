@@ -51,6 +51,13 @@ namespace RobotConfig {
     constexpr uint8_t ENCODER_MOTOR_RIGHT_P = 4;
     constexpr uint8_t ENCODER_MOTOR_RIGHT_H = 5;
 
+    // --- Encodeurs — paramètres mécaniques ---
+    constexpr uint16_t ENCODER_PPR           = 11;      // impulsions/tour moteur
+    constexpr uint8_t  ENCODER_GEAR_RATIO    = 30;      // rapport de réduction
+    constexpr uint16_t ENCODER_CPR           = ENCODER_PPR * ENCODER_GEAR_RATIO; // 330 CPR à la roue
+    constexpr float    WHEEL_DIAMETER_MM     = 40.0f;   // diamètre roue (mm)
+    constexpr float    WHEEL_CIRCUMFERENCE_MM = 3.14159f * WHEEL_DIAMETER_MM;    // ~125.7 mm
+
     // --- Capteurs Infrarouges SHARP (Analogiques sur ADC1) ---
 
    

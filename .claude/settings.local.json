@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"& ''C:\\\\Users\\\\sylva\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe'' -c ''import pypdf; print\\(\"\"pypdf OK\"\"\\)'' 2>&1\")",
+      "Bash(powershell -Command \"& ''C:\\\\Users\\\\sylva\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe'' -m pip install pypdf --quiet; & ''C:\\\\Users\\\\sylva\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe'' -c \"\"import pypdf; print\\(''OK''\\)\"\"\")"
+    ]
+  }
+}
