@@ -4,10 +4,10 @@
 namespace RobotConfig {
     // --- Moteurs (PWM & Direction) ---
     // GPIO numériques standards pour les ponts en H
-    constexpr uint8_t MOTOR_LEFT_PWM = 25;
-    constexpr uint8_t MOTOR_LEFT_DIR = 26;
-    constexpr uint8_t MOTOR_RIGHT_PWM = 27;
-    constexpr uint8_t MOTOR_RIGHT_DIR = 14;
+    constexpr uint8_t MOTOR_LEFT_PWM = 25; // IN4
+    constexpr uint8_t MOTOR_LEFT_DIR = 26; // IN3
+    constexpr uint8_t MOTOR_RIGHT_PWM = 27; // IN2
+    constexpr uint8_t MOTOR_RIGHT_DIR = 14; // IN1
     
     // --- Capteurs de ligne (Digitaux ou Analogiques sur ADC1) ---
     constexpr uint8_t LINE_SENSOR_FRONT_LEFT = 32;
@@ -19,7 +19,7 @@ namespace RobotConfig {
     constexpr uint8_t START_BUTTON = 15;
     
     // --- Paramètres PWM ---
-    constexpr int PWM_FREQUENCY = 5000;
+    constexpr int PWM_FREQUENCY = 20000;
     constexpr int PWM_RESOLUTION = 8;  // Plage 0-255
     constexpr int PWM_CHANNEL_LEFT = 0;
     constexpr int PWM_CHANNEL_RIGHT = 1;

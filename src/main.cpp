@@ -11,19 +11,18 @@ void setup() {
         return;
     }
 
-    // Avance 2 secondes
-    motor.setSpeed(200, 200);
-    delay(2000);
-
-    // Tourne à gauche 1 seconde
-    motor.setSpeed(-150, 150);
-    delay(1000);
-
-    // Recule 1 seconde
-    motor.setSpeed(-200, -200);
-    delay(1000);
-
-    // Arrêt
+     for (int i = 0; i < 100; i++)
+    {
+       motor.setSpeedPercent(200, 0);
+       delay(100);
+    }
+    motor.stop();
+    delay(100);
+     for (int i = 100; i > 0; i--)
+    {
+       motor.setSpeedPercent(200, 0);
+       delay(100);
+    }
     motor.stop();
 }
 

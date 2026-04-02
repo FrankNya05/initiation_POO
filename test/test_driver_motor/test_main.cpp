@@ -10,20 +10,11 @@ void setup() {
         Serial.println("Erreur init moteur !");
         return;
     }
-
-    // Avance 2 secondes
-    motor.setSpeed(200, 200);
-    delay(2000);
-
-    // Tourne à gauche 1 seconde
-    motor.setSpeed(-150, 150);
-    delay(1000);
-
-    // Recule 1 seconde
-    motor.setSpeed(-200, -200);
-    delay(1000);
-
-    // Arrêt
+    for (size_t i = 0; i < 254; i++)
+    {
+       motor.setSpeed(200, i);
+       delay(100);
+    }
     motor.stop();
 }
 
