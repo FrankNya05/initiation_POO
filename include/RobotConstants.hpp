@@ -54,4 +54,9 @@ enum class MotorSide : uint8_t {
     RIGHT
 };
 
+    constexpr int ENCODER_PPR        = 7;
+    constexpr int ENCODER_QUADRATURE = 4;
+    constexpr int GEAR_RATIO         = 50;
+    constexpr int PULSES_PER_REV     = ENCODER_PPR * ENCODER_QUADRATURE * GEAR_RATIO; // 1400
+
 } // namespace RobotConstants
