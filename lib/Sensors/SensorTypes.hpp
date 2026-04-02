@@ -7,7 +7,6 @@ All enumerated sensors for this allpication
 
 #pragma once
 
-
 // Structure envoyée via la queue
 
 
@@ -58,9 +57,14 @@ struct SensorData {
     bool           isValid   = false;
 };
 
+<<<<<<< HEAD
 enum class Event : uint8_t {
         NONE = 0,
         SINGLE_PRESS,
         DOUBLE_PRESS,
         LONG_PRESS
     };
+=======
+
+
+>>>>>>> dde70204bdf5f18da3ffdafd657b180c68878c88
