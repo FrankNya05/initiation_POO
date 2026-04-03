@@ -63,11 +63,7 @@ public:
                * (60000.0f / deltaMs);
     }
 
-    // ISR statiques
-    static void IRAM_ATTR _isrLeft()  { if (_instanceLeft)  _instanceLeft->_handleISR(); }
-    static void IRAM_ATTR _isrRight() { if (_instanceRight) _instanceRight->_handleISR(); }
+    // ISR statiques — définies dans Encoder.cpp (IRAM_ATTR interdit dans un .hpp)
+    static void IRAM_ATTR _isrLeft();
+    static void IRAM_ATTR _isrRight();
 };
-
-// Définition des instances statiques (dans un .cpp ou en inline C++17)
-inline Encoder* Encoder::_instanceLeft  = nullptr;
-inline Encoder* Encoder::_instanceRight = nullptr;
