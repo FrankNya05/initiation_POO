@@ -1,41 +1,103 @@
 #include "DriverMotor.hpp"
 #include "Encoder.hpp"
+#include "DriverManager.hpp"
 
-// 1. Instanciation — pinA (phase), pinB (hall)
 Encoder encLeft (RobotConfig::ENCODER_MOTOR_LEFT_P,  RobotConfig::ENCODER_MOTOR_LEFT_H);
 Encoder encRight(RobotConfig::ENCODER_MOTOR_RIGHT_P, RobotConfig::ENCODER_MOTOR_RIGHT_H);
 
+DriverMotor driver;
+DriverManager divices;
+
 void setup() {
     Serial.begin(115200);
+    delay(1000);
 
-    // 2. Initialisation — attache les ISR de quadrature
-    encLeft.init(true);   // isLeft = true  → utilise _isrLeft
-    encRight.init(false); // isLeft = false → utilise _isrRight
+    Serial.println("=== SETUP START ===");
+
+    encLeft.init(true);
+    encRight.init(false);
+    Serial.println("Encodeurs initialisés");
+
+    divices.add(&driver, DriverRole::MAIN, true);
+    if (!divices.initAll()) {
+        Serial.println("ERREUR init moteurs!");
+    } else {
+        Serial.println("Moteurs initialisés");
+    }
+
+    encLeft.resetAngle();
+    encRight.resetAngle();
+    Serial.println("=== SETUP DONE ===");
 }
+static float nextTarget = 5.0f;
+static bool  goingBack  = false;  // false = 0→360, true = 360→0
+static uint32_t startMs = 0;
+static bool started     = false;
+static uint32_t lastPrintMs = 0;
 
 void loop() {
-    static uint32_t lastMs = millis();
+    uint32_t now = millis();
 
-    uint32_t now   = millis();
-    float    delta = now - lastMs;   // intervalle en ms
-    lastMs = now;
+    if (!started) {
+        startMs = now;
+        started = true;
+        nextTarget = 5.0f;
+        Serial.println("Moteur démarré ! (0° → 360°)");
+    }
 
-    // 3a. Lire et remettre à zéro atomiquement (usage typique PID)
-    int32_t pulsesL = encLeft.getAndReset();
-    int32_t pulsesR = encRight.getAndReset();
+    float angleL = encLeft.getRelativeAngleDeg();
+    float angleR = encRight.getRelativeAngleDeg();
 
-    // 3b. Ou lire sans réinitialiser (position cumulée)
-    int32_t posL = encLeft.getCount();
+    if (now - lastPrintMs >= 200) {
+        Serial.printf("angle L = %6.1f° | angle R = %6.1f°\n", angleL, angleR);
+        lastPrintMs = now;
+    }
 
-    // 4. Conversion en RPM
-    float rpmL = encLeft.getRPM(pulsesL, delta);
-    float rpmR = encRight.getRPM(pulsesR, delta);
+    if (!goingBack) {
+        // Aller : 0 → 360
+        divices.move(RobotConstants::Direction::AVANT, 80);
 
-    Serial.printf("Gauche: %d pulses → %.1f RPM | Droite: %d pulses → %.1f RPM\n",
-                  pulsesL, rpmL, pulsesR, rpmR);
+        if (angleL >= nextTarget) {
+            Serial.printf(">>> Palier %5.1f° atteint !\n", nextTarget);
+            nextTarget += 5.0f;
+        }
 
-    // 5. Remise à zéro manuelle (si besoin de reset sans lecture)
-    // encLeft.reset();
+        if (angleL >= 360.0f) {
+            uint32_t elapsed = now - startMs;
+            Serial.printf("--- 360° atteint en %lu ms (%.2f s) ---\n",
+                          elapsed, elapsed / 1000.0f);
 
-    delay(100); // période de 100 ms
+            // Préparer retour
+            goingBack  = true;
+            nextTarget = 360.0f - 5.0f; // paliers décroissants
+            encLeft.resetAngle();
+            encRight.resetAngle();
+            startMs = now;
+            Serial.println("Retour : 360° → 0°");
+        }
+    } else {
+        // Retour : 360 → 0
+        divices.move(RobotConstants::Direction::ARRIERE, 80);
+
+        float absAngle = -angleL; // angle négatif en arrière
+
+        if (absAngle >= (360.0f - nextTarget)) {
+            Serial.printf(">>> Palier %5.1f° atteint !\n", nextTarget);
+            nextTarget -= 5.0f;  // Décrémenter
+        }
+
+        if (absAngle >= 360.0f) {
+            uint32_t elapsed = now - startMs;
+            Serial.printf("--- Retour 0° atteint en %lu ms (%.2f s) ---\n",
+                          elapsed, elapsed / 1000.0f);
+
+            // Préparer prochain aller
+            goingBack  = false;
+            nextTarget = 5.0f;
+            encLeft.resetAngle();
+            encRight.resetAngle();
+            startMs = now;
+            Serial.println("Nouvel aller : 0° → 360°");
+        }
+    }
 }
