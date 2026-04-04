@@ -6,6 +6,7 @@ All enumerated sensors for this allpication
 */
 
 #pragma once
+#include <stdint.h>
 
 // Structure envoyée via la queue
 
