@@ -41,53 +41,101 @@ WiFiComm comm(
     "robot/commande"      // topic abonnement
 );
 SensorManager sensorManager;
+=======
+DriverMotor driver;
+DriverManager divices;
+>>>>>>> b215584e08a6b66950a8b05360cafe94028d3953:src/main.cpp
 
 void setup() {
     Serial.begin(115200);
+    delay(1000);
 
-    // ── Enregistre les callbacks AVANT begin() ────────────────────
-    sensorManager.add(new BattSensor(SensorPosition::CENTER), true);
+    Serial.println("=== SETUP START ===");
 
-    if (!sensorManager.initAll()) {
-        LOG("Erreur init capteurs !");
+    encLeft.init(true);
+    encRight.init(false);
+    Serial.println("Encodeurs initialisés");
+
+    divices.add(&driver, DriverRole::MAIN, true);
+    if (!divices.initAll()) {
+        Serial.println("ERREUR init moteurs!");
+    } else {
+        Serial.println("Moteurs initialisés");
     }
 
-    comm.onConnect([]() {
-        LOG("✅ Connecté au broker Mosquitto !");
-    });
-
-    comm.onDisconnect([]() {
-        LOG("❌ Connexion perdue !");
-    });
-
-    comm.onReceive([](const std::string& msg) {
-        LOGF("📩 Message reçu : %s\n", msg.c_str());
-
-        // Exemple — réagir à une commande
-        if (msg == "STOP")  LOG("🛑 Robot arrêté !");
-        if (msg == "START") LOG("🚀 Robot démarré !");
-    });
-
-    // ── Démarre la connexion ──────────────────────────────────────
-    comm.begin();
+    encLeft.resetAngle();
+    encRight.resetAngle();
+    Serial.println("=== SETUP DONE ===");
 }
+static float nextTarget = 5.0f;
+static bool  goingBack  = false;  // false = 0→360, true = 360→0
+static uint32_t startMs = 0;
+static bool started     = false;
+static uint32_t lastPrintMs = 0;
 
 void loop() {
-    comm.loop();
+    uint32_t now = millis();
 
-    sensorManager.updateAll();  // ← ne pas oublier de mettre à jour les capteurs !
-
-    SensorData batLevel = sensorManager.getDataByPosition(SensorPosition::CENTER);
-
-    if (true) {
-        LOGF("Niveau de la batterie : %.3f V\n", batLevel.value.scalar);
-
-        if (comm.isConnected()) {
-            comm.send(serializeSensorData(batLevel));
-        }
-    }else{
-       LOGF("Niveau de la batterie : %.3f V\n", batLevel.value.scalar);
+    if (!started) {
+        startMs = now;
+        started = true;
+        nextTarget = 5.0f;
+        Serial.println("Moteur démarré ! (0° → 360°)");
     }
 
-    delay(500);
+    float angleL = encLeft.getRelativeAngleDeg();
+    float angleR = encRight.getRelativeAngleDeg();
+
+    if (now - lastPrintMs >= 200) {
+        Serial.printf("angle L = %6.1f° | angle R = %6.1f°\n", angleL, angleR);
+        lastPrintMs = now;
+    }
+
+    if (!goingBack) {
+        // Aller : 0 → 360
+        divices.move(RobotConstants::Direction::AVANT, 80);
+
+        if (angleL >= nextTarget) {
+            Serial.printf(">>> Palier %5.1f° atteint !\n", nextTarget);
+            nextTarget += 5.0f;
+        }
+
+        if (angleL >= 360.0f) {
+            uint32_t elapsed = now - startMs;
+            Serial.printf("--- 360° atteint en %lu ms (%.2f s) ---\n",
+                          elapsed, elapsed / 1000.0f);
+
+            // Préparer retour
+            goingBack  = true;
+            nextTarget = 360.0f - 5.0f; // paliers décroissants
+            encLeft.resetAngle();
+            encRight.resetAngle();
+            startMs = now;
+            Serial.println("Retour : 360° → 0°");
+        }
+    } else {
+        // Retour : 360 → 0
+        divices.move(RobotConstants::Direction::ARRIERE, 80);
+
+        float absAngle = -angleL; // angle négatif en arrière
+
+        if (absAngle >= (360.0f - nextTarget)) {
+            Serial.printf(">>> Palier %5.1f° atteint !\n", nextTarget);
+            nextTarget -= 5.0f;  // Décrémenter
+        }
+
+        if (absAngle >= 360.0f) {
+            uint32_t elapsed = now - startMs;
+            Serial.printf("--- Retour 0° atteint en %lu ms (%.2f s) ---\n",
+                          elapsed, elapsed / 1000.0f);
+
+            // Préparer prochain aller
+            goingBack  = false;
+            nextTarget = 5.0f;
+            encLeft.resetAngle();
+            encRight.resetAngle();
+            startMs = now;
+            Serial.println("Nouvel aller : 0° → 360°");
+        }
+    }
 }

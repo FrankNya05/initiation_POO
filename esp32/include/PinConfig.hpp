@@ -4,10 +4,10 @@
 namespace RobotConfig {
     // --- Moteurs (PWM & Direction) ---
     // GPIO numériques standards pour les ponts en H
-    constexpr uint8_t MOTOR_LEFT_PWM = 25;
-    constexpr uint8_t MOTOR_LEFT_DIR = 26;
-    constexpr uint8_t MOTOR_RIGHT_PWM = 27;
-    constexpr uint8_t MOTOR_RIGHT_DIR = 14;
+    constexpr uint8_t MOTOR_LEFT_PWM = 25; // IN4
+    constexpr uint8_t MOTOR_LEFT_DIR = 26; // IN3
+    constexpr uint8_t MOTOR_RIGHT_PWM = 27; // IN2
+    constexpr uint8_t MOTOR_RIGHT_DIR = 14; // IN1
     
     // --- Capteurs de ligne (Digitaux ou Analogiques sur ADC1) ---
     constexpr uint8_t LINE_SENSOR_FRONT_LEFT = 32;
@@ -19,15 +19,17 @@ namespace RobotConfig {
     constexpr uint8_t START_BUTTON = 15;
     
     // --- Paramètres PWM ---
-    constexpr int PWM_FREQUENCY = 5000;
+    constexpr int PWM_FREQUENCY = 20000;
     constexpr int PWM_RESOLUTION = 8;  // Plage 0-255
-    constexpr int PWM_CHANNEL_LEFT = 0;
-    constexpr int PWM_CHANNEL_RIGHT = 1;
+    constexpr int PWM_CHANNEL_LEFT      = 0;  // xIN2 gauche (PWM)
+    constexpr int PWM_CHANNEL_RIGHT     = 1;  // xIN2 droit  (PWM)
+    constexpr int PWM_CHANNEL_LEFT_DIR  = 2;  // xIN1 gauche (DIR)
+    constexpr int PWM_CHANNEL_RIGHT_DIR = 3;  // xIN1 droit  (DIR)
 
     // --- UART pour le LIDAR ---
     // Utilise les ports série matériels stables (UART2)
-    constexpr uint8_t RX_LIDAR = 16;
-    constexpr uint8_t TX_LIDAR = 17;
+    constexpr uint8_t RX_LIDAR = 17;
+    constexpr uint8_t TX_LIDAR = 16;
     
     // --- Capteur Batterie (ADC1) ---
     // INDISPENSABLE pour fonctionner avec le Bluetooth/Wi-Fi
@@ -50,11 +52,7 @@ namespace RobotConfig {
     constexpr uint8_t ENCODER_MOTOR_LEFT_H = 19;
     constexpr uint8_t ENCODER_MOTOR_RIGHT_P = 4;
     constexpr uint8_t ENCODER_MOTOR_RIGHT_H = 5;
-
-    // --- Capteurs Infrarouges SHARP (Analogiques sur ADC1) ---
-
-   
-
+ 
     // --- Commande Freinage BJT ---
     // Pin de sortie stable pour le transistor
     constexpr uint8_t BJT_COMMAND = 23;

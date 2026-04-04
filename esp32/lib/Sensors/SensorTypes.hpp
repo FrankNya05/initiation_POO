@@ -6,6 +6,7 @@ All enumerated sensors for this allpication
 */
 
 #pragma once
+#include <stdint.h>
 
 // Structure envoyée via la queue
 
@@ -56,6 +57,3 @@ struct SensorData {
     uint32_t       timestamp = 0;
     bool           isValid   = false;
 };
-
-
-

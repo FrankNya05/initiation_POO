@@ -31,7 +31,7 @@ public:
     }
 
     bool update() override {
-        data.value    = SensorValue(digitalRead(pin) ? 1.0f : 0.0f); 
+        data.value    = SensorValue(analogRead(pin) ? 2048.0f : 0.0f); 
         data.position = position;
         data.isValid  = true;
         data.timestamp = millis();

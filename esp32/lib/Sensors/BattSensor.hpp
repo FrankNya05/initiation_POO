@@ -93,7 +93,7 @@ public:
         if (_data.isValid && voltage <= BattConfig::VOLT_ALERT) {
             _onLowBattery(voltage);
         }
-
+        
         return _data.isValid;
     }
 
