@@ -21,8 +21,10 @@ namespace RobotConfig {
     // --- Paramètres PWM ---
     constexpr int PWM_FREQUENCY = 20000;
     constexpr int PWM_RESOLUTION = 8;  // Plage 0-255
-    constexpr int PWM_CHANNEL_LEFT = 0;
-    constexpr int PWM_CHANNEL_RIGHT = 1;
+    constexpr int PWM_CHANNEL_LEFT      = 0;  // xIN2 gauche (PWM)
+    constexpr int PWM_CHANNEL_RIGHT     = 1;  // xIN2 droit  (PWM)
+    constexpr int PWM_CHANNEL_LEFT_DIR  = 2;  // xIN1 gauche (DIR)
+    constexpr int PWM_CHANNEL_RIGHT_DIR = 3;  // xIN1 droit  (DIR)
 
     // --- UART pour le LIDAR ---
     // Utilise les ports série matériels stables (UART2)
@@ -50,18 +52,7 @@ namespace RobotConfig {
     constexpr uint8_t ENCODER_MOTOR_LEFT_H = 19;
     constexpr uint8_t ENCODER_MOTOR_RIGHT_P = 4;
     constexpr uint8_t ENCODER_MOTOR_RIGHT_H = 5;
-
-    // --- Encodeurs — paramètres mécaniques ---
-    constexpr uint16_t ENCODER_PPR           = 11;      // impulsions/tour moteur
-    constexpr uint8_t  ENCODER_GEAR_RATIO    = 30;      // rapport de réduction
-    constexpr uint16_t ENCODER_CPR           = ENCODER_PPR * ENCODER_GEAR_RATIO; // 330 CPR à la roue
-    constexpr float    WHEEL_DIAMETER_MM     = 40.0f;   // diamètre roue (mm)
-    constexpr float    WHEEL_CIRCUMFERENCE_MM = 3.14159f * WHEEL_DIAMETER_MM;    // ~125.7 mm
-
-    // --- Capteurs Infrarouges SHARP (Analogiques sur ADC1) ---
-
-   
-
+ 
     // --- Commande Freinage BJT ---
     // Pin de sortie stable pour le transistor
     constexpr uint8_t BJT_COMMAND = 23;

@@ -54,9 +54,17 @@ enum class MotorSide : uint8_t {
     RIGHT
 };
 
-    constexpr int ENCODER_PPR        = 7;
-    constexpr int ENCODER_QUADRATURE = 4;
-    constexpr int GEAR_RATIO         = 50;
-    constexpr int PULSES_PER_REV     = ENCODER_PPR * ENCODER_QUADRATURE * GEAR_RATIO; // 1400
+    constexpr int   ENCODER_PPR        = 7;
+    constexpr int   ENCODER_QUADRATURE = 4;
+    constexpr int   GEAR_RATIO         = 100;  // JGA12-N20 100:1 (validé expérimentalement)
+    constexpr int   PULSES_PER_REV     = ENCODER_PPR * ENCODER_QUADRATURE * GEAR_RATIO; // 2800
+
+    constexpr float WHEEL_DIAMETER_MM      = 50.0f;
+    constexpr float WHEEL_CIRCUMFERENCE_MM = 3.14159f * WHEEL_DIAMETER_MM;
+
+    // Angle par pulse (déduit de PULSES_PER_REV = 840)
+    constexpr float DEG_PER_PULSE = 360.0f / PULSES_PER_REV;   // ~0.4286°
+    constexpr float RAD_PER_PULSE = 6.28318f / PULSES_PER_REV; // ~0.007480 rad
+
 
 } // namespace RobotConstants

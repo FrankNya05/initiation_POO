@@ -7,8 +7,9 @@ class Encoder {
 private:
     uint8_t  _pinA;
     uint8_t  _pinB;
-    volatile int32_t _count = 0;
-    volatile int8_t  _lastA = 0;
+    volatile int32_t _count      = 0;  // compteur relatif (remis à 0 sur demande)
+    volatile int32_t _totalCount = 0;  // position absolue (jamais remise à 0)
+    volatile int8_t  _lastA      = 0;
 
     // Pointeurs statiques pour les ISR (une par moteur)
     static Encoder* _instanceLeft;
@@ -17,11 +18,16 @@ private:
     void _handleISR() {
         int8_t a = digitalRead(_pinA);
         int8_t b = digitalRead(_pinB);
-        // Quadrature : direction selon état relatif A/B
+        int8_t delta = 0;
+
         if (a != _lastA) {
-            _count += (a == b) ? +1 : -1;
-            _lastA = a;
+            delta = (a == b) ? +1 : -1;  // flanc sur A
+        } else {
+            delta = (a != b) ? +1 : -1;  // flanc sur B
         }
+        _count      += delta;
+        _totalCount += delta;
+        _lastA = a;
     }
 
 public:
@@ -53,21 +59,48 @@ public:
         return val;
     }
 
-    int32_t getCount() const { return _count; }
-    void    reset()          { _count = 0; }
+    int32_t getCount()      const { return _count; }
+    int32_t getTotalCount() const { return _totalCount; }
+    void    reset()               { _count = 0; }
 
     // Conversion pulses → RPM
     float getRPM(int32_t pulses, float deltaMs) {
-        // pulses / PULSES_PER_REV / (deltaMs/60000)
         return (pulses / (float)RobotConstants::PULSES_PER_REV)
                * (60000.0f / deltaMs);
     }
 
-    // ISR statiques
-    static void IRAM_ATTR _isrLeft()  { if (_instanceLeft)  _instanceLeft->_handleISR(); }
-    static void IRAM_ATTR _isrRight() { if (_instanceRight) _instanceRight->_handleISR(); }
-};
+    // ── Position angulaire absolue (depuis démarrage) ──────────
+    float getAngleDeg() const {
+        return _totalCount * RobotConstants::DEG_PER_PULSE;
+    }
 
-// Définition des instances statiques (dans un .cpp ou en inline C++17)
-inline Encoder* Encoder::_instanceLeft  = nullptr;
-inline Encoder* Encoder::_instanceRight = nullptr;
+    float getAngleRad() const {
+        return _totalCount * RobotConstants::RAD_PER_PULSE;
+    }
+
+    // ── Position angulaire relative (depuis dernier resetAngle) ─
+    float getRelativeAngleDeg() {
+        portDISABLE_INTERRUPTS();
+        int32_t val = _count;
+        portENABLE_INTERRUPTS();
+        return val * RobotConstants::DEG_PER_PULSE;
+    }
+
+    float getRelativeAngleRad() {
+        portDISABLE_INTERRUPTS();
+        int32_t val = _count;
+        portENABLE_INTERRUPTS();
+        return val * RobotConstants::RAD_PER_PULSE;
+    }
+
+    // Remise à zéro de la position relative uniquement
+    void resetAngle() {
+        portDISABLE_INTERRUPTS();
+        _count = 0;
+        portENABLE_INTERRUPTS();
+    }
+
+    // ISR statiques — définies dans Encoder.cpp (IRAM_ATTR interdit dans un .hpp)
+    static void IRAM_ATTR _isrLeft();
+    static void IRAM_ATTR _isrRight();
+};
