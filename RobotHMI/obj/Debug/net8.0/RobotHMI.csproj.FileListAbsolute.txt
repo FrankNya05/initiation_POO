@@ -66,3 +66,4 @@ C:\GEI_1076_Labs\initiation_POO\RobotHMI\obj\Debug\net8.0\refint\Avalonia\RobotH
 C:\GEI_1076_Labs\initiation_POO\RobotHMI\obj\Debug\net8.0\RobotHMI.csproj.CopyComplete
 C:\GEI_1076_Labs\initiation_POO\RobotHMI\obj\Debug\net8.0\RobotHMI.genruntimeconfig.cache
 C:\GEI_1076_Labs\initiation_POO\RobotHMI\obj\Debug\net8.0\ref\RobotHMI.dll
+C:\GEI_1076_Labs\initiation_POO\RobotHMI\bin\Debug\net8.0\MQTTnet.dll

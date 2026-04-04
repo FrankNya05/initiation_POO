@@ -106,7 +106,7 @@ public class ConnectionPanelViewModel : ViewModelBase
     // MQTT parameters
     // -----------------------------------------------------------------------
 
-    private string _mqttBrokerIp = string.Empty;
+    private string _mqttBrokerIp = "127.0.0.1";
 
     /// <summary>IP address of the MQTT broker (e.g., "192.168.1.100").</summary>
     public string MqttBrokerIp
@@ -128,7 +128,7 @@ public class ConnectionPanelViewModel : ViewModelBase
         set => SetField(ref _mqttPort, value);
     }
 
-    private string _mqttTelemetryTopic = "robot/telemetry";
+    private string _mqttTelemetryTopic = "robot/data";
 
     /// <summary>Topic the HMI subscribes to for incoming robot data.</summary>
     public string MqttTelemetryTopic
@@ -137,7 +137,7 @@ public class ConnectionPanelViewModel : ViewModelBase
         set => SetField(ref _mqttTelemetryTopic, value);
     }
 
-    private string _mqttCommandTopic = "robot/cmd";
+    private string _mqttCommandTopic = "robot/commande";
 
     /// <summary>Topic the HMI publishes motor commands to.</summary>
     public string MqttCommandTopic

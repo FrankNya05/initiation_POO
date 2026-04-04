@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "W9h2mC/hPsMMCUg3wV+sNXAoPqInWiBRpSSqSv5EUoezFwSOuNzBpbhT7Ylj/1Lbqr3WXxh6oSsxc6+wstkVAQ==",
+  "dgSpecHash": "DpM4j+lP8Oui5qCbSMYiRkKbDif6mMKCOlD5qhGRqnrVfFm6Kb32s6h8vx8UyUMyRufVCZ2PKh2a8OSus7c5Ug==",
   "success": true,
   "projectFilePath": "C:\\GEI_1076_Labs\\initiation_POO\\RobotHMI\\RobotHMI.csproj",
   "expectedPackageFiles": [
@@ -26,6 +26,7 @@
     "C:\\Users\\arman\\.nuget\\packages\\harfbuzzsharp.nativeassets.webassembly\\7.3.0.2\\harfbuzzsharp.nativeassets.webassembly.7.3.0.2.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\harfbuzzsharp.nativeassets.win32\\7.3.0.2\\harfbuzzsharp.nativeassets.win32.7.3.0.2.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\microcom.runtime\\0.11.0\\microcom.runtime.0.11.0.nupkg.sha512",
+    "C:\\Users\\arman\\.nuget\\packages\\mqttnet\\4.3.3.952\\mqttnet.4.3.3.952.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\skiasharp\\2.88.8\\skiasharp.2.88.8.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\skiasharp.nativeassets.linux\\2.88.8\\skiasharp.nativeassets.linux.2.88.8.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\skiasharp.nativeassets.macos\\2.88.8\\skiasharp.nativeassets.macos.2.88.8.nupkg.sha512",
@@ -38,6 +39,16 @@
     "C:\\Users\\arman\\.nuget\\packages\\tmds.dbus.protocol\\0.16.0\\tmds.dbus.protocol.0.16.0.nupkg.sha512"
   ],
   "logs": [
+    {
+      "code": "NU1603",
+      "level": "Warning",
+      "warningLevel": 1,
+      "message": "RobotHMI depends on MQTTnet (>= 4.3.3) but MQTTnet 4.3.3 was not found. An approximate best match of MQTTnet 4.3.3.952 was resolved.",
+      "libraryId": "MQTTnet",
+      "targetGraphs": [
+        "net8.0"
+      ]
+    },
     {
       "code": "NU1903",
       "level": "Warning",

@@ -66,6 +66,10 @@
               "target": "Package",
               "version": "[11.1.0, )"
             },
+            "MQTTnet": {
+              "target": "Package",
+              "version": "[4.3.3, )"
+            },
             "System.Text.Json": {
               "target": "Package",
               "version": "[8.0.0, )"

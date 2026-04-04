@@ -49,7 +49,7 @@ public class MqttConnectionConfig : ConnectionConfig
     /// <summary>
     /// IP address of the MQTT broker (e.g., "192.168.1.100").
     /// </summary>
-    public string BrokerIp { get; set; } = string.Empty;
+    public string BrokerIp { get; set; } = "127.0.0.1";
 
     /// <summary>
     /// MQTT broker port. Standard is 1883 (no TLS).
@@ -58,13 +58,13 @@ public class MqttConnectionConfig : ConnectionConfig
 
     /// <summary>
     /// Topic the HMI subscribes to in order to receive data from the robot.
-    /// Example: "robot/telemetry"
+    /// Matches the ESP32 _topicPub: "robot/data"
     /// </summary>
-    public string TelemetryTopic { get; set; } = "robot/telemetry";
+    public string TelemetryTopic { get; set; } = "robot/data";
 
     /// <summary>
     /// Topic the HMI publishes to in order to send commands to the robot.
-    /// Example: "robot/cmd"
+    /// Matches the ESP32 _topicSub: "robot/commande"
     /// </summary>
-    public string CommandTopic { get; set; } = "robot/cmd";
+    public string CommandTopic { get; set; } = "robot/commande";
 }

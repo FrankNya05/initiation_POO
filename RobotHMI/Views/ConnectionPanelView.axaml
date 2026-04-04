@@ -117,7 +117,7 @@
                                Width="120"
                                VerticalAlignment="Center"/>
                     <TextBox Text="{Binding MqttBrokerIp}"
-                             Watermark="e.g. 192.168.1.100"
+                             Watermark="127.0.0.1"
                              Width="220"
                              Height="44"
                              FontSize="14"/>
@@ -145,7 +145,7 @@
                                Width="120"
                                VerticalAlignment="Center"/>
                     <TextBox Text="{Binding MqttTelemetryTopic}"
-                             Watermark="robot/telemetry"
+                             Watermark="robot/data"
                              Width="220"
                              Height="44"
                              FontSize="14"/>
@@ -159,7 +159,7 @@
                                Width="120"
                                VerticalAlignment="Center"/>
                     <TextBox Text="{Binding MqttCommandTopic}"
-                             Watermark="robot/cmd"
+                             Watermark="robot/commande"
                              Width="220"
                              Height="44"
                              FontSize="14"/>

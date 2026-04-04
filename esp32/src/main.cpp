@@ -33,9 +33,9 @@ std::string serializeSensorData(const SensorData& data) {
 
 // ── Instanciation ─────────────────────────────────────────────────
 WiFiComm comm(
-    "S25Ultra",           // ssid
-    "sylvain123",         // password
-    "10.135.195.249",     // broker IP
+    "S21",           // ssid
+    "ftel7488",         // password
+    "10.164.172.249",     // broker IP
     1883,                 // port
     "robot/data",         // topic publication
     "robot/commande"      // topic abonnement

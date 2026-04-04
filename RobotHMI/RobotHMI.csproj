@@ -28,7 +28,7 @@
             MQTT client — needed by MqttCommClient (real implementation, Phase 2+).
             Stubbed in Phase 1; adding the reference now avoids a build change later.
         -->
-        <!-- <PackageReference Include="MQTTnet"                Version="4.3.3" /> -->
+        <PackageReference Include="MQTTnet" Version="4.3.3" />
 
         <!-- Diagnostic / compile-time AXAML binding support -->
         <PackageReference Include="Avalonia.Diagnostics" Version="11.1.0" Condition="'$(Configuration)' == 'Debug'" />
