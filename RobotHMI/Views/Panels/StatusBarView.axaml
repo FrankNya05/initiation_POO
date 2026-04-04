@@ -1,0 +1,139 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:RobotHMI.ViewModels"
+             x:Class="RobotHMI.Views.Panels.StatusBarView"
+             x:DataType="vm:StatusBarViewModel">
+
+    <!--
+        StatusBarView
+        ═════════════
+        Provides ambient awareness of the system state at a glance.
+        Docked to the Bottom of MainWindow's DockPanel.
+        All values come from StatusBarViewModel — zero logic here.
+
+        Sections (left to right in the top row):
+          1. Connection dot + "Connected / Disconnected" text
+          2. Protocol badge (BLE or MQTT)
+          3. Robot state badge
+
+        Section below:
+          4. Recent log entries (last 5, newest at top)
+
+        Style tokens are identical to the other panels:
+          Background  #1E1E2E
+          Text        #CDD6F4
+          Label       #6C7086
+          Header      #89B4FA
+          Accent      #CBA6F7
+    -->
+
+    <Border Background="#181825"
+            BorderBrush="#313244"
+            BorderThickness="0,1,0,0"
+            Padding="12,6">
+
+        <StackPanel Spacing="6">
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Row 1: connection dot · protocol badge · robot state badge  -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+
+            <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+
+                <!-- Connection dot + text -->
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+
+                    <Panel Width="10" Height="10" VerticalAlignment="Center">
+                        <Ellipse Width="10" Height="10" Fill="#A6E3A1"
+                                 IsVisible="{Binding IsConnected}"/>
+                        <Ellipse Width="10" Height="10" Fill="#585B70"
+                                 IsVisible="{Binding !IsConnected}"/>
+                    </Panel>
+
+                    <TextBlock Text="{Binding ConnectionStatusText}"
+                               Foreground="#CDD6F4"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+
+                </StackPanel>
+
+                <!-- Separator -->
+                <TextBlock Text="·" Foreground="#45475A" FontSize="12"
+                           VerticalAlignment="Center"/>
+
+                <!-- Protocol badge -->
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+
+                    <TextBlock Text="Protocol"
+                               Foreground="#6C7086"
+                               FontSize="11"
+                               VerticalAlignment="Center"/>
+
+                    <Border CornerRadius="3"
+                            Padding="6,2"
+                            Background="#313244">
+                        <TextBlock Text="{Binding ActiveProtocolText}"
+                                   Foreground="#89B4FA"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"/>
+                    </Border>
+
+                </StackPanel>
+
+                <!-- Separator -->
+                <TextBlock Text="·" Foreground="#45475A" FontSize="12"
+                           VerticalAlignment="Center"/>
+
+                <!-- Robot state badge -->
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+
+                    <TextBlock Text="Robot"
+                               Foreground="#6C7086"
+                               FontSize="11"
+                               VerticalAlignment="Center"/>
+
+                    <Border CornerRadius="3"
+                            Padding="6,2"
+                            Background="#313244">
+                        <TextBlock Text="{Binding RobotStatusText}"
+                                   Foreground="#CBA6F7"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"/>
+                    </Border>
+
+                </StackPanel>
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Row 2: recent log entries                                    -->
+            <!-- Visible only when there are entries — keeps the bar compact  -->
+            <!-- when no logs have arrived yet.                               -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+
+            <StackPanel Spacing="2">
+
+                <TextBlock Text="RECENT LOGS"
+                           Foreground="#45475A"
+                           FontSize="10"
+                           FontWeight="Bold"
+                           LetterSpacing="1"/>
+
+                <ItemsControl ItemsSource="{Binding RecentLogs}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}"
+                                       Foreground="#6C7086"
+                                       FontSize="11"
+                                       FontFamily="Courier New, monospace"
+                                       TextWrapping="NoWrap"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</UserControl>

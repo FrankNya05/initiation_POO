@@ -1,12 +1,50 @@
-#include "DriverMotor.hpp"
-#include "Encoder.hpp"
-#include "DriverManager.hpp"
+#include <Arduino.h>
+#include "WiFiComm.hpp"
+#include "RTOSConfig.hpp"
+#include "SensorManger.hpp"
+#include "LineSensor.hpp"
+#include "IRSensor.hpp"
+#include "PinConfig.hpp"
+#include "BattSensor.hpp"
+#include <ArduinoJson.h>
 
-Encoder encLeft (RobotConfig::ENCODER_MOTOR_LEFT_P,  RobotConfig::ENCODER_MOTOR_LEFT_H);
-Encoder encRight(RobotConfig::ENCODER_MOTOR_RIGHT_P, RobotConfig::ENCODER_MOTOR_RIGHT_H);
 
+std::string serializeSensorData(const SensorData& data) {
+    StaticJsonDocument<256> doc;
+
+    doc["ts"]    = data.timestamp;
+    doc["pos"]   = (int)data.position;
+    doc["valid"] = data.isValid;
+
+    // Scalar ou Vector selon le type de capteur
+    if (data.dims == SensorDims::VEC3) {
+        JsonObject val = doc.createNestedObject("val");
+        val["x"] = round(data.value.vector.x * 1000) / 1000.0;  // distance
+        val["y"] = round(data.value.vector.y * 10)   / 10.0;     // angle
+        val["z"] = (int)data.value.vector.z;                      // nb points
+    } else {
+        doc["val"] = round(data.value.scalar * 1000) / 1000.0;
+    }
+
+    std::string output;
+    serializeJson(doc, output);
+    return output.c_str();
+}
+
+// ── Instanciation ─────────────────────────────────────────────────
+WiFiComm comm(
+    "S21",           // ssid
+    "ftel7488",         // password
+    "10.164.172.249",     // broker IP
+    1883,                 // port
+    "robot/data",         // topic publication
+    "robot/commande"      // topic abonnement
+);
+SensorManager sensorManager;
+=======
 DriverMotor driver;
 DriverManager divices;
+>>>>>>> b215584e08a6b66950a8b05360cafe94028d3953:src/main.cpp
 
 void setup() {
     Serial.begin(115200);
