@@ -16,7 +16,8 @@ enum class SensorType
     LIDAR,
     LINE,
     ULTRASONIC,
-    TOFSensor
+    TOFSensor,
+    IMU
 };
 
 enum status{ RUN,NO_RUN};
@@ -38,13 +39,17 @@ enum class SensorPosition
 
 enum class SensorDims : uint8_t {
     SCALAR = 1,
-    VEC3 = 3
+    VEC3 = 3,
+    IMU6 = 6
 };
 
 union SensorValue {
     float scalar;
     struct { float x, y, z; } vector;
-
+    struct {
+        float ax, ay, az;   // accéléromètre
+        float gx, gy, gz;   // gyroscope
+    } imu;
     SensorValue() : scalar(0.0f) {}
     explicit SensorValue(float s) : scalar(s) {}
     SensorValue(float x, float y, float z) : vector{x, y, z} {}
