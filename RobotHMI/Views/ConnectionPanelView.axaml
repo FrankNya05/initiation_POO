@@ -1,0 +1,226 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:RobotHMI.ViewModels"
+             x:Class="RobotHMI.Views.Panels.ConnectionPanelView"
+             x:DataType="vm:ConnectionPanelViewModel">
+
+    <!--
+        ConnectionPanelView
+        ═══════════════════
+        Displays protocol selection, connection parameters, connect/disconnect
+        buttons, and a status line.
+
+        All values come from ConnectionPanelViewModel via data bindings.
+        This file contains ZERO logic — only layout declarations.
+
+        Touch-friendly design notes:
+          - Minimum button height: 48px
+          - Labels are large enough to read on a 7" screen
+          - Input fields have generous padding
+    -->
+
+    <UserControl.Styles>
+        <!--
+            Status dot: red by default, turns green when IsConnected is true.
+            The ViewModel drives this by toggling the "connected" class
+            on the Ellipse via Classes binding in the template below.
+            We use two Ellipses (one per state) with IsVisible bindings —
+            the simplest approach that requires no converter class.
+        -->
+    </UserControl.Styles>
+
+    <Border Background="#1E1E2E"
+            CornerRadius="8"
+            Padding="16">
+
+        <StackPanel Spacing="12">
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Row 1: Protocol selector                                    -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+
+                <TextBlock Text="Protocol"
+                           Foreground="#CDD6F4"
+                           FontSize="15"
+                           VerticalAlignment="Center"
+                           Width="80"/>
+
+                <ComboBox ItemsSource="{Binding AvailableProtocols}"
+                          SelectedItem="{Binding SelectedProtocol}"
+                          Width="120"
+                          Height="44"
+                          FontSize="15"/>
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Row 2a: BLE parameters (visible only when BLE is selected)  -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+
+            <StackPanel Spacing="8"
+                        IsVisible="{Binding IsBleSelected}">
+
+                <TextBlock Text="BLE Parameters"
+                           Foreground="#89B4FA"
+                           FontSize="13"
+                           FontWeight="SemiBold"/>
+
+                <!-- Device Name -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="Device Name"
+                               Foreground="#CDD6F4"
+                               FontSize="14"
+                               Width="120"
+                               VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding BleDeviceName}"
+                             Watermark="e.g. MiniSumoRobot"
+                             Width="220"
+                             Height="44"
+                             FontSize="14"/>
+                </StackPanel>
+
+                <!-- Service UUID -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="Service UUID"
+                               Foreground="#CDD6F4"
+                               FontSize="14"
+                               Width="120"
+                               VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding BleServiceUuid}"
+                             Watermark="e.g. 12345678-..."
+                             Width="220"
+                             Height="44"
+                             FontSize="14"/>
+                </StackPanel>
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Row 2b: MQTT parameters (visible only when MQTT is selected)-->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+
+            <StackPanel Spacing="8"
+                        IsVisible="{Binding IsMqttSelected}">
+
+                <TextBlock Text="MQTT Parameters"
+                           Foreground="#89B4FA"
+                           FontSize="13"
+                           FontWeight="SemiBold"/>
+
+                <!-- Broker IP -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="Broker IP"
+                               Foreground="#CDD6F4"
+                               FontSize="14"
+                               Width="120"
+                               VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding MqttBrokerIp}"
+                             Watermark="127.0.0.1"
+                             Width="220"
+                             Height="44"
+                             FontSize="14"/>
+                </StackPanel>
+
+                <!-- Port -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="Port"
+                               Foreground="#CDD6F4"
+                               FontSize="14"
+                               Width="120"
+                               VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding MqttPort}"
+                             Watermark="1883"
+                             Width="100"
+                             Height="44"
+                             FontSize="14"/>
+                </StackPanel>
+
+                <!-- Telemetry Topic -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="Telemetry Topic"
+                               Foreground="#CDD6F4"
+                               FontSize="14"
+                               Width="120"
+                               VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding MqttTelemetryTopic}"
+                             Watermark="robot/data"
+                             Width="220"
+                             Height="44"
+                             FontSize="14"/>
+                </StackPanel>
+
+                <!-- Command Topic -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="Command Topic"
+                               Foreground="#CDD6F4"
+                               FontSize="14"
+                               Width="120"
+                               VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding MqttCommandTopic}"
+                             Watermark="robot/commande"
+                             Width="220"
+                             Height="44"
+                             FontSize="14"/>
+                </StackPanel>
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Row 3: Connect / Disconnect buttons                          -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+
+                <Button Content="Connect"
+                        Command="{Binding ConnectCommand}"
+                        Height="48"
+                        Width="120"
+                        FontSize="15"
+                        Background="#89B4FA"
+                        Foreground="#1E1E2E"
+                        FontWeight="SemiBold"
+                        CornerRadius="6"/>
+
+                <Button Content="Disconnect"
+                        Command="{Binding DisconnectCommand}"
+                        Height="48"
+                        Width="120"
+                        FontSize="15"
+                        Background="#F38BA8"
+                        Foreground="#1E1E2E"
+                        FontWeight="SemiBold"
+                        CornerRadius="6"/>
+
+            </StackPanel>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Row 4: Status indicator                                      -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+
+                <!--
+                    Status dot: two overlapping Ellipses, only one visible at a time.
+                    This is the simplest converter-free approach in Avalonia.
+                    Green dot shown when IsConnected = true, red when false.
+                -->
+                <Panel Width="14" Height="14" VerticalAlignment="Center">
+                    <Ellipse Width="14" Height="14" Fill="#A6E3A1"
+                             IsVisible="{Binding IsConnected}"/>
+                    <Ellipse Width="14" Height="14" Fill="#F38BA8"
+                             IsVisible="{Binding !IsConnected}"/>
+                </Panel>
+
+                <TextBlock Text="{Binding StatusText}"
+                           Foreground="#CDD6F4"
+                           FontSize="14"
+                           VerticalAlignment="Center"/>
+
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</UserControl>
