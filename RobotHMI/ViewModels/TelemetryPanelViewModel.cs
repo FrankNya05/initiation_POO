@@ -5,23 +5,18 @@ using RobotHMI.Services;
 namespace RobotHMI.ViewModels;
 
 // ---------------------------------------------------------------------------
-// TelemetryPanelViewModel
+// TelemetryPanelViewModel — V1 protocol
 // ---------------------------------------------------------------------------
-// Drives the TelemetryPanelView. Owns all observable properties that the
-// telemetry panel displays: line sensor states, IR distances, robot status.
+// Drives the TelemetryPanelView.
 //
-// How it fits into the flow (architecture doc §7.1):
-//   ESP32 → ICommClient → RobotCommunicationService → MessageRouter
-//     → OnTelemetryReceived(rawJson) / OnStateReceived(rawJson)
-//       → TelemetryParser.ParseTelemetry / ParseState
-//         → Dispatcher.UIThread.InvokeAsync → SetField → binding updates
+// V1 data received via OnTelemetryReceived:
+//   - Timestamp
+//   - Battery (voltage, percent, critical)
+//   - Line sensors (frontLeft, frontRight, backLeft, back)
+//   - Lidar (dist, angle, valid)
 //
-// Rules followed:
-//   - Does NOT parse JSON itself — delegates to TelemetryParser
-//   - Does NOT reference any communication class
-//   - ALL property updates that touch bound properties happen inside
-//     Dispatcher.UIThread.InvokeAsync() because the router calls these
-//     handlers from a background thread
+// Threading rule: all SetField calls happen inside Dispatcher.UIThread.InvokeAsync
+// because MessageRouter calls these handlers from a background thread.
 // ---------------------------------------------------------------------------
 
 public class TelemetryPanelViewModel : ViewModelBase
@@ -31,7 +26,6 @@ public class TelemetryPanelViewModel : ViewModelBase
     // -----------------------------------------------------------------------
 
     private bool _lineFrontLeft;
-    /// <summary>True when the front-left line sensor detects the white border.</summary>
     public bool LineFrontLeft
     {
         get => _lineFrontLeft;
@@ -39,7 +33,6 @@ public class TelemetryPanelViewModel : ViewModelBase
     }
 
     private bool _lineFrontRight;
-    /// <summary>True when the front-right line sensor detects the white border.</summary>
     public bool LineFrontRight
     {
         get => _lineFrontRight;
@@ -47,47 +40,84 @@ public class TelemetryPanelViewModel : ViewModelBase
     }
 
     private bool _lineBackLeft;
-    /// <summary>True when the back-left line sensor detects the white border.</summary>
     public bool LineBackLeft
     {
         get => _lineBackLeft;
         private set => SetField(ref _lineBackLeft, value);
     }
 
-    private bool _lineBackRight;
-    /// <summary>True when the back-right line sensor detects the white border.</summary>
-    public bool LineBackRight
+    /// <summary>
+    /// V1 uses a single rear sensor ("back"), not separate backLeft/backRight.
+    /// The View binds to LineBack for the rear indicator.
+    /// </summary>
+    private bool _lineBack;
+    public bool LineBack
     {
-        get => _lineBackRight;
-        private set => SetField(ref _lineBackRight, value);
+        get => _lineBack;
+        private set => SetField(ref _lineBack, value);
     }
 
     // -----------------------------------------------------------------------
-    // IR / distance sensor properties (centimetres)
+    // Battery properties
     // -----------------------------------------------------------------------
 
-    private int _irFront;
-    /// <summary>Distance in centimetres from the front IR sensor.</summary>
-    public int IrFront
+    private float _batteryVoltage;
+    /// <summary>Battery voltage in volts (e.g. 7.4).</summary>
+    public float BatteryVoltage
     {
-        get => _irFront;
-        private set => SetField(ref _irFront, value);
+        get => _batteryVoltage;
+        private set
+        {
+            if (SetField(ref _batteryVoltage, value))
+                OnPropertyChanged(nameof(BatteryVoltageText));
+        }
     }
 
-    private int _irLeft;
-    /// <summary>Distance in centimetres from the left IR sensor.</summary>
-    public int IrLeft
+    /// <summary>Formatted voltage string for display, e.g. "7.4 V".</summary>
+    public string BatteryVoltageText => $"{BatteryVoltage:F1} V";
+
+    private int _batteryPercent;
+    /// <summary>State of charge, 0–100.</summary>
+    public int BatteryPercent
     {
-        get => _irLeft;
-        private set => SetField(ref _irLeft, value);
+        get => _batteryPercent;
+        private set => SetField(ref _batteryPercent, value);
     }
 
-    private int _irRight;
-    /// <summary>Distance in centimetres from the right IR sensor.</summary>
-    public int IrRight
+    private bool _batteryCritical;
+    /// <summary>True when the battery is critically low — can drive a warning colour in the View.</summary>
+    public bool BatteryCritical
     {
-        get => _irRight;
-        private set => SetField(ref _irRight, value);
+        get => _batteryCritical;
+        private set => SetField(ref _batteryCritical, value);
+    }
+
+    // -----------------------------------------------------------------------
+    // Lidar properties
+    // -----------------------------------------------------------------------
+
+    private float _lidarDist;
+    /// <summary>Lidar distance (float, as sent by ESP32).</summary>
+    public float LidarDist
+    {
+        get => _lidarDist;
+        private set => SetField(ref _lidarDist, value);
+    }
+
+    private float _lidarAngle;
+    /// <summary>Lidar target angle in degrees (float, as sent by ESP32).</summary>
+    public float LidarAngle
+    {
+        get => _lidarAngle;
+        private set => SetField(ref _lidarAngle, value);
+    }
+
+    private bool _lidarValid;
+    /// <summary>True when the lidar reading is valid (target in range).</summary>
+    public bool LidarValid
+    {
+        get => _lidarValid;
+        private set => SetField(ref _lidarValid, value);
     }
 
     // -----------------------------------------------------------------------
@@ -95,39 +125,31 @@ public class TelemetryPanelViewModel : ViewModelBase
     // -----------------------------------------------------------------------
 
     private RobotStatus _robotStatus = RobotStatus.Unknown;
-    /// <summary>Current operating state reported by the robot.</summary>
     public RobotStatus RobotStatus
     {
         get => _robotStatus;
         private set
         {
             if (SetField(ref _robotStatus, value))
-                // Keep the display string in sync automatically.
                 OnPropertyChanged(nameof(RobotStatusText));
         }
     }
 
-    /// <summary>
-    /// Human-readable version of RobotStatus shown directly in the View.
-    /// Derived property — updated whenever RobotStatus changes.
-    /// </summary>
     public string RobotStatusText => RobotStatus switch
     {
         RobotStatus.Idle       => "IDLE",
-        RobotStatus.Running    => "RUNNING",
-        RobotStatus.Searching  => "SEARCHING",
-        RobotStatus.Attacking  => "ATTACKING",
-        RobotStatus.Retreating => "RETREATING",
+        RobotStatus.Searching  => "SEARCH",
+        RobotStatus.Attacking  => "ATTACK",
+        RobotStatus.Retreating => "DEFENSE",
         RobotStatus.Error      => "ERROR",
         _                      => "—"
     };
 
     // -----------------------------------------------------------------------
-    // Timestamp of the last received telemetry update
+    // Timestamp / last update
     // -----------------------------------------------------------------------
 
     private string _lastUpdateText = "No data yet";
-    /// <summary>Short string showing when the last telemetry packet arrived.</summary>
     public string LastUpdateText
     {
         get => _lastUpdateText;
@@ -140,37 +162,39 @@ public class TelemetryPanelViewModel : ViewModelBase
 
     /// <summary>
     /// Called by MessageRouter when a TELEMETRY message arrives.
-    /// Parses the JSON and updates all observable properties on the UI thread.
+    /// Delegates parsing to TelemetryParser, then updates UI on the UI thread.
     /// </summary>
     public void OnTelemetryReceived(string rawJson)
     {
-        // Parsing happens here, off the UI thread — this is fine because
-        // TelemetryParser is stateless and creates no UI objects.
         var data = TelemetryParser.ParseTelemetry(rawJson);
-
         if (data == null)
-            return; // Parser already logged the error
+            return;
 
-        // Marshal property updates to the UI thread.
-        // This is REQUIRED because MessageRouter calls us from a background thread.
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            LineFrontLeft  = data.LineFrontLeft;
-            LineFrontRight = data.LineFrontRight;
-            LineBackLeft   = data.LineBackLeft;
-            LineBackRight  = data.LineBackRight;
+            // Line sensors
+            LineFrontLeft  = data.Line.FrontLeft;
+            LineFrontRight = data.Line.FrontRight;
+            LineBackLeft   = data.Line.BackLeft;
+            LineBack       = data.Line.Back;
 
-            IrFront = data.IrFront;
-            IrLeft  = data.IrLeft;
-            IrRight = data.IrRight;
+            // Battery
+            BatteryVoltage  = data.Battery.Voltage;
+            BatteryPercent  = data.Battery.Percent;
+            BatteryCritical = data.Battery.Critical;
 
-            LastUpdateText = $"Last update: {DateTime.Now:HH:mm:ss}";
+            // Lidar
+            LidarDist  = data.Lidar.Dist;
+            LidarAngle = data.Lidar.Angle;
+            LidarValid = data.Lidar.Valid;
+
+            LastUpdateText = $"ts={data.Timestamp}  {DateTime.Now:HH:mm:ss}";
         });
     }
 
     /// <summary>
     /// Called by MessageRouter when a STATE message arrives.
-    /// Parses the state string and updates RobotStatus on the UI thread.
+    /// Delegates parsing to TelemetryParser.ParseState.
     /// </summary>
     public void OnStateReceived(string rawJson)
     {

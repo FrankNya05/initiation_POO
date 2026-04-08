@@ -153,6 +153,8 @@ void CommunicationManager::_handleIncoming(const std::string& raw) {
     // Step 1: extract the message type from the envelope.
     std::string type = CommandParser::parseType(raw);
 
+    LOGF("[CommManager] RAW RX: %s\n", raw.c_str());
+    
     if (type.empty()) {
         // CommandParser already logged the JSON error.
         return;
