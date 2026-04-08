@@ -1,153 +1,185 @@
 /*
  * CommunicationManager.cpp
  * -------------------------
- * Implements channel ownership, selection, delegation, and auto-selection.
+ * See CommunicationManager.hpp for the full design explanation.
+ *
+ * Logging: all output uses LOG / LOGF from RTOSConfig.hpp.
+ * No raw Serial calls are present in this file.
  */
 
 #include "CommunicationManager.hpp"
-#include <Arduino.h>
 
 // ============================================================================
 // CONSTRUCTOR
 // ============================================================================
 
-CommunicationManager::CommunicationManager(HardwareSerial& uart_serial,
-                                           unsigned long uart_baud)
-    : ble_(std::make_unique<RobotBLEServer>()),
-      uart_(std::make_unique<UARTComm>(uart_serial, uart_baud)),
-      active_comm_(nullptr),          // Not yet pointing anywhere — set in selectChannel()
-      current_channel_(CommChannel::BLE),
-      auto_select_enabled_(false)
+CommunicationManager::CommunicationManager(const char*     ssid,
+                                           const char*     password,
+                                           const char*     brokerIp,
+                                           uint16_t        brokerPort,
+                                           ICommInterface* secondary)
+    : wifi_(std::make_unique<WiFiComm>(
+          ssid,
+          password,
+          brokerIp,
+          brokerPort,
+          "robot/telemetry",   // V1 publish topic  (Robot → Pi)
+          "robot/cmd"          // V1 subscribe topic (Pi → Robot)
+      ))
+    , secondary_(secondary)
+    , motor_command_callback_(nullptr)
+    , robot_command_callback_(nullptr)
 {
-    // Point active_comm_ at the default channel (BLE).
-    // We do this via selectChannel() rather than directly, so the logic
-    // lives in one place only.
-    selectChannel(CommChannel::BLE);
-}
+    // Register _handleIncoming as the receive callback on the primary channel.
+    // Done here so it is in place before begin() is called.
+    wifi_->onReceive([this](const std::string& raw) {
+        _handleIncoming(raw);
+    });
 
-// ============================================================================
-// CHANNEL SELECTION
-// ============================================================================
-
-void CommunicationManager::selectChannel(CommChannel channel) {
-    current_channel_ = channel;
-
-    // Update active_comm_ to point at the right channel object.
-    // This is the ONLY place in the codebase that assigns active_comm_.
-    switch (channel) {
-        case CommChannel::BLE:
-            active_comm_ = ble_.get();
-            Serial.println("[CommManager] Active channel: BLE");
-            break;
-
-        case CommChannel::UART:
-            active_comm_ = uart_.get();
-            Serial.println("[CommManager] Active channel: UART");
-            break;
-    }
-
-    // Re-apply any callbacks that were registered before the switch.
-    // This ensures the new channel fires the same callbacks as the old one.
-    applyCallbacksTo(active_comm_);
-}
-
-void CommunicationManager::autoSelect() {
-    // Strategy: prefer BLE when a client is connected, otherwise use UART.
-    // This is a simple fallback policy — you can make it more sophisticated later.
-    if (ble_->isConnected()) {
-        if (current_channel_ != CommChannel::BLE) {
-            Serial.println("[CommManager] autoSelect: switching to BLE.");
-            selectChannel(CommChannel::BLE);
-        }
-    } else {
-        if (current_channel_ != CommChannel::UART) {
-            Serial.println("[CommManager] autoSelect: BLE not connected, switching to UART.");
-            selectChannel(CommChannel::UART);
-        }
+    // If a secondary channel was provided, register the same receive handler.
+    // Outgoing messages always go through wifi_.
+    if (secondary_ != nullptr) {
+        secondary_->onReceive([this](const std::string& raw) {
+            _handleIncoming(raw);
+        });
     }
 }
 
-void CommunicationManager::setAutoSelectEnabled(bool enabled) {
-    auto_select_enabled_ = enabled;
-    Serial.printf("[CommManager] Auto-select %s.\n", enabled ? "enabled" : "disabled");
-}
-
-CommChannel CommunicationManager::activeChannel() const {
-    return current_channel_;
-}
-
 // ============================================================================
-// ICommInterface DELEGATION
+// LIFECYCLE
 // ============================================================================
 
 void CommunicationManager::begin() {
-    // Initialize both channels so they are ready to use.
-    // Even if only one is active, the other should be initialized —
-    // for example, BLE must be advertising even if we're currently on UART.
-    Serial.println("[CommManager] Initializing BLE channel...");
-    ble_->begin();
+    // Apply transport callbacks before connecting so they fire correctly.
+    if (connect_callback_)    wifi_->onConnect(connect_callback_);
+    if (disconnect_callback_) wifi_->onDisconnect(disconnect_callback_);
 
-    Serial.println("[CommManager] Initializing UART channel...");
-    uart_->begin();
+    // Connect to WiFi and MQTT (blocking until success or timeout).
+    wifi_->begin();
 
-    Serial.println("[CommManager] All channels initialized.");
+    // Initialize the secondary channel if present.
+    // Its failure must not block the primary path.
+    if (secondary_ != nullptr) {
+        if (connect_callback_)    secondary_->onConnect(connect_callback_);
+        if (disconnect_callback_) secondary_->onDisconnect(disconnect_callback_);
+        secondary_->begin();
+    }
 }
 
-void CommunicationManager::send(const std::string& data) {
-    if (active_comm_ == nullptr) {
-        Serial.println("[CommManager] ERROR: send() called but no active channel.");
-        return;
-    }
-    active_comm_->send(data);
+void CommunicationManager::update() {
+    // WiFiComm::loop() keeps the MQTT connection alive and dispatches
+    // received messages through the registered onReceive callback.
+    wifi_->loop();
+
+    // Note: the secondary channel (BLE or UART) may need its own polling.
+    // UARTComm::update() and WiFiComm::loop() are not part of the
+    // ICommInterface contract, so they cannot be called generically here.
+    // If you use a secondary UART channel, call uart_->update() explicitly
+    // in your task loop.
 }
 
 bool CommunicationManager::isConnected() const {
-    if (active_comm_ == nullptr) return false;
-    return active_comm_->isConnected();
+    return wifi_->isConnected();
 }
 
-void CommunicationManager::onReceive(std::function<void(const std::string&)> callback) {
-    receive_callback_ = callback;           // Store for re-application after channel switch
-    applyCallbacksTo(active_comm_);         // Apply immediately to the current channel
-}
+// ============================================================================
+// TRANSPORT EVENT CALLBACKS
+// ============================================================================
 
 void CommunicationManager::onConnect(std::function<void()> callback) {
     connect_callback_ = callback;
-    applyCallbacksTo(active_comm_);
+    wifi_->onConnect(callback);
+    if (secondary_ != nullptr) secondary_->onConnect(callback);
 }
 
 void CommunicationManager::onDisconnect(std::function<void()> callback) {
     disconnect_callback_ = callback;
-    applyCallbacksTo(active_comm_);
+    wifi_->onDisconnect(callback);
+    if (secondary_ != nullptr) secondary_->onDisconnect(callback);
 }
 
 // ============================================================================
-// POLLING
+// OUTGOING MESSAGES
 // ============================================================================
 
-void CommunicationManager::update() {
-    // UART does not generate hardware interrupts for received bytes — it must
-    // be polled. We always poll it regardless of which channel is active,
-    // so incoming bytes are never lost if the channel switches mid-message.
-    uart_->update();
+void CommunicationManager::sendTelemetry(const TelemetryData& data) {
+    std::string json = TelemetrySerializer::buildTelemetry(data);
+    sendRaw(json);
+}
 
-    // If auto-select is on, evaluate whether to switch channels this cycle.
-    if (auto_select_enabled_) {
-        autoSelect();
+void CommunicationManager::sendState(RobotConstants::State state) {
+    std::string json = TelemetrySerializer::buildState(state);
+    sendRaw(json);
+}
+
+void CommunicationManager::sendAck(const std::string& command) {
+    std::string json = TelemetrySerializer::buildAck(command);
+    sendRaw(json);
+}
+
+void CommunicationManager::sendLog(const std::string& message) {
+    std::string json = TelemetrySerializer::buildLog(message);
+    sendRaw(json);
+}
+
+void CommunicationManager::sendRaw(const std::string& data) {
+    // Connection guard: do not attempt to publish when MQTT is not active.
+    // PubSubClient silently fails in this case, which is hard to debug.
+    // We make the drop explicit with a log warning instead.
+    if (!wifi_->isConnected()) {
+        LOG("[CommManager] sendRaw: not connected, message dropped.");
+        return;
     }
+    wifi_->send(data);
 }
 
 // ============================================================================
-// PRIVATE HELPERS
+// INCOMING COMMAND CALLBACKS
 // ============================================================================
 
-void CommunicationManager::applyCallbacksTo(ICommInterface* channel) {
-    // Safety: do nothing if the pointer is null or no callbacks are set yet.
-    if (channel == nullptr) return;
+void CommunicationManager::onMotorCommand(std::function<void(const MotorCommand&)> callback) {
+    motor_command_callback_ = callback;
+}
 
-    // Only apply callbacks that have actually been registered.
-    // An empty std::function evaluates to false in a boolean context.
-    if (receive_callback_)    channel->onReceive(receive_callback_);
-    if (connect_callback_)    channel->onConnect(connect_callback_);
-    if (disconnect_callback_) channel->onDisconnect(disconnect_callback_);
+void CommunicationManager::onRobotCommand(std::function<void(const RobotCommand&)> callback) {
+    robot_command_callback_ = callback;
+}
+
+// ============================================================================
+// PRIVATE — INCOMING MESSAGE HANDLER
+// ============================================================================
+
+void CommunicationManager::_handleIncoming(const std::string& raw) {
+    // Step 1: extract the message type from the envelope.
+    std::string type = CommandParser::parseType(raw);
+
+    if (type.empty()) {
+        // CommandParser already logged the JSON error.
+        return;
+    }
+
+    // Step 2: route to the correct parser, send ACK, fire typed callback.
+
+    if (type == "CMD_MOTOR") {
+        MotorCommand cmd;
+        if (CommandParser::parseCmdMotor(raw, cmd)) {
+            // ACK is sent before acting on the command so the HMI knows
+            // reception was confirmed regardless of what the robot does next.
+            sendAck(cmd.action);
+            if (motor_command_callback_) motor_command_callback_(cmd);
+        }
+        return;
+    }
+
+    if (type == "CMD_ROBOT") {
+        RobotCommand cmd;
+        if (CommandParser::parseCmdRobot(raw, cmd)) {
+            sendAck(cmd.command);
+            if (robot_command_callback_) robot_command_callback_(cmd);
+        }
+        return;
+    }
+
+    // Unknown type — surface the mismatch for the developer.
+    LOGF("[CommManager] Unknown message type: '%s'\n", type.c_str());
 }
