@@ -4,34 +4,34 @@ using RobotHMI.Models;
 namespace RobotHMI.Services;
 
 // ---------------------------------------------------------------------------
-// TelemetryParser
+// TelemetryParser — V1 protocol
 // ---------------------------------------------------------------------------
 // Static helper that converts raw JSON strings into typed model objects.
 // This is the ONLY place in the application that knows the shape of the
-// TELEMETRY and STATE message payloads.
+// incoming message payloads.
 //
-// Responsibilities (architecture doc §7):
-//   - Parse a TELEMETRY JSON string → SensorData
-//   - Parse a STATE JSON string     → RobotStatus
-//   - Return null / Unknown on any parse failure so the caller can react
-//     gracefully without crashing
-//
-// Both methods are static — no state, no dependencies, easy to test.
-//
-// Expected JSON formats (architecture doc §6.2):
+// V1 incoming message formats:
 //
 //   TELEMETRY:
 //   {
 //     "type": "TELEMETRY",
 //     "payload": {
-//       "line":  { "frontLeft": bool, "frontRight": bool,
-//                  "backLeft":  bool, "backRight":  bool },
-//       "ir":    { "front": int, "left": int, "right": int }
+//       "ts": 1234567,
+//       "battery": { "voltage": 7.4, "percent": 85, "critical": false },
+//       "line":    { "frontLeft": bool, "frontRight": bool,
+//                    "backLeft": bool,  "back": bool },
+//       "lidar":   { "dist": 42, "angle": 15, "valid": true }
 //     }
 //   }
 //
 //   STATE:
-//   { "type": "STATE", "payload": "RUNNING" }
+//   { "type": "STATE", "payload": { "state": "ATTACK" } }
+//
+//   ACK (parsed in ControlPanelViewModel):
+//   { "type": "ACK", "payload": { "command": "FORWARD" } }
+//
+//   LOG (parsed in StatusBarViewModel):
+//   { "type": "LOG", "payload": { "message": "Battery low" } }
 // ---------------------------------------------------------------------------
 
 public static class TelemetryParser
@@ -42,49 +42,60 @@ public static class TelemetryParser
 
     /// <summary>
     /// Parses a full TELEMETRY JSON envelope into a SensorData object.
-    /// Returns null if parsing fails for any reason (malformed JSON,
-    /// missing fields, unexpected types).
-    /// The caller should log the failure and keep the last known good value.
+    /// Returns null if the JSON is malformed or the payload is missing.
+    /// Missing sections (battery, line, lidar) are filled with safe defaults
+    /// rather than causing a failure — the firmware may omit optional fields.
     /// </summary>
     public static SensorData? ParseTelemetry(string rawJson)
     {
         try
         {
-            using var doc = JsonDocument.Parse(rawJson);  // Check if this line is okay
+            using var doc = JsonDocument.Parse(rawJson);
             var root = doc.RootElement;
 
-            // Navigate to the payload object.
             if (!root.TryGetProperty("payload", out var payload))
             {
-                Console.WriteLine("[TelemetryParser] TELEMETRY message missing 'payload'.");
+                Console.WriteLine("[TelemetryParser] TELEMETRY missing 'payload'.");
                 return null;
             }
 
             var data = new SensorData();
 
-            // Line sensors
-            if (payload.TryGetProperty("line", out var line))
+            // ----------------------------------------------------------------
+            // Timestamp
+            // ----------------------------------------------------------------
+            data.Timestamp = ReadLong(payload, "ts");
+
+            // ----------------------------------------------------------------
+            // Battery
+            // ----------------------------------------------------------------
+            if (payload.TryGetProperty("battery", out var battery))
             {
-                data.LineFrontLeft = ReadBool(line, "frontLeft");
-                data.LineFrontRight = ReadBool(line, "frontRight");
-                data.LineBackLeft = ReadBool(line, "backLeft");
-                data.LineBackRight = ReadBool(line, "backRight");
-            }
-            else
-            {
-                Console.WriteLine("[TelemetryParser] TELEMETRY payload missing 'line' section.");
+                data.Battery.Voltage  = ReadFloat(battery, "voltage");
+                data.Battery.Percent  = ReadInt(battery,   "percent");
+                data.Battery.Critical = ReadBool(battery,  "critical");
             }
 
-            // IR / distance sensors
-            if (payload.TryGetProperty("ir", out var ir))
+            // ----------------------------------------------------------------
+            // Line sensors
+            // Note: V1 uses "back" (single rear sensor), not "backRight".
+            // ----------------------------------------------------------------
+            if (payload.TryGetProperty("line", out var line))
             {
-                data.IrFront = ReadInt(ir, "front");
-                data.IrLeft = ReadInt(ir, "left");
-                data.IrRight = ReadInt(ir, "right");
+                data.Line.FrontLeft  = ReadBool(line, "frontLeft");
+                data.Line.FrontRight = ReadBool(line, "frontRight");
+                data.Line.BackLeft   = ReadBool(line, "backLeft");
+                data.Line.Back       = ReadBool(line, "back");
             }
-            else
+
+            // ----------------------------------------------------------------
+            // Lidar (replaces the previous IR section)
+            // ----------------------------------------------------------------
+            if (payload.TryGetProperty("lidar", out var lidar))
             {
-                Console.WriteLine("[TelemetryParser] TELEMETRY payload missing 'ir' section.");
+                data.Lidar.Dist  = ReadFloat(lidar, "dist");
+                data.Lidar.Angle = ReadFloat(lidar, "angle");
+                data.Lidar.Valid = ReadBool(lidar,  "valid");
             }
 
             return data;
@@ -101,9 +112,11 @@ public static class TelemetryParser
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Parses a full STATE JSON envelope into a RobotStatus enum value.
-    /// Returns RobotStatus.Unknown if the payload string is unrecognised
-    /// or if parsing fails.
+    /// Parses a STATE JSON envelope into a RobotStatus enum value.
+    ///
+    /// V1 final format: { "type": "STATE", "payload": { "state": "ATTACK" } }
+    /// V1 state strings: IDLE | SEARCH | ATTACK | DEFENSE
+    /// The payload is an object with a "state" string field.
     /// </summary>
     public static RobotStatus ParseState(string rawJson)
     {
@@ -114,26 +127,28 @@ public static class TelemetryParser
 
             if (!root.TryGetProperty("payload", out var payload))
             {
-                Console.WriteLine("[TelemetryParser] STATE message missing 'payload'.");
+                Console.WriteLine("[TelemetryParser] STATE missing 'payload'.");
                 return RobotStatus.Unknown;
             }
 
-            var stateString = payload.GetString() ?? string.Empty;
+            // V1: payload is an object { "state": "ATTACK" }
+            var stateString = ReadString(payload, "state");
 
-            // Map the raw string to the enum. Case-insensitive so minor
-            // firmware differences don't break the UI.
             var status = stateString.ToUpperInvariant() switch
             {
-                "IDLE"       => RobotStatus.Idle,
-                "RUNNING"    => RobotStatus.Running,
+                // V1 final protocol states
+                "IDLE"    => RobotStatus.Idle,
+                "SEARCH"  => RobotStatus.Searching,
+                "ATTACK"  => RobotStatus.Attacking,
+                "DEFENSE" => RobotStatus.Retreating,
+                // Fallback tolerance for older firmware during transition
+                "RUNNING"    => RobotStatus.Idle,
                 "SEARCHING"  => RobotStatus.Searching,
                 "ATTACKING"  => RobotStatus.Attacking,
                 "RETREATING" => RobotStatus.Retreating,
-                "ERROR"      => RobotStatus.Error,
                 _            => RobotStatus.Unknown
             };
 
-            // Log unrecognised states so developers notice firmware mismatches.
             if (status == RobotStatus.Unknown && !string.IsNullOrEmpty(stateString))
                 Console.WriteLine($"[TelemetryParser] Unknown robot state: '{stateString}'");
 
@@ -147,31 +162,102 @@ public static class TelemetryParser
     }
 
     // -----------------------------------------------------------------------
-    // Private helpers — safe field readers
+    // ParseAckCommand
     // -----------------------------------------------------------------------
 
-    // These helpers return a safe default value instead of throwing when a
-    // field is missing or the wrong type. The robot firmware may evolve, and
-    // we should never crash on a missing optional field.
-
-    private static bool ReadBool(JsonElement parent, string propertyName)
+    /// <summary>
+    /// Extracts the acknowledged command name from an ACK message.
+    ///
+    /// V1 format: { "type": "ACK", "payload": { "command": "FORWARD" } }
+    /// Returns an empty string on any failure.
+    /// </summary>
+    public static string ParseAckCommand(string rawJson)
     {
-        if (parent.TryGetProperty(propertyName, out var prop) &&
-            (prop.ValueKind == JsonValueKind.True || prop.ValueKind == JsonValueKind.False))
+        try
         {
-            return prop.GetBoolean();
+            using var doc = JsonDocument.Parse(rawJson);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("payload", out var payload))
+                return string.Empty;
+
+            return ReadString(payload, "command");
         }
-        return false; // safe default
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"[TelemetryParser] Failed to parse ACK: {ex.Message}");
+            return string.Empty;
+        }
     }
 
-    private static int ReadInt(JsonElement parent, string propertyName)
+    // -----------------------------------------------------------------------
+    // ParseLogMessage
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Extracts the log text from a LOG message.
+    ///
+    /// V1 format: { "type": "LOG", "payload": { "message": "Battery low" } }
+    /// Returns an empty string on any failure.
+    /// </summary>
+    public static string ParseLogMessage(string rawJson)
     {
-        if (parent.TryGetProperty(propertyName, out var prop) &&
-            prop.TryGetInt32(out int value))
+        try
         {
-            return value;
+            using var doc = JsonDocument.Parse(rawJson);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("payload", out var payload))
+                return string.Empty;
+
+            return ReadString(payload, "message");
         }
-        return 0; // safe default
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"[TelemetryParser] Failed to parse LOG: {ex.Message}");
+            return string.Empty;
+        }
     }
 
+    // -----------------------------------------------------------------------
+    // Private helpers — safe field readers
+    // -----------------------------------------------------------------------
+    // All return a safe default when the field is absent or the wrong type.
+    // This means the UI stays functional even if the firmware omits fields.
+
+    private static bool ReadBool(JsonElement parent, string name)
+    {
+        if (parent.TryGetProperty(name, out var p) &&
+            p.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            return p.GetBoolean();
+        return false;
+    }
+
+    private static int ReadInt(JsonElement parent, string name)
+    {
+        if (parent.TryGetProperty(name, out var p) && p.TryGetInt32(out int v))
+            return v;
+        return 0;
+    }
+
+    private static long ReadLong(JsonElement parent, string name)
+    {
+        if (parent.TryGetProperty(name, out var p) && p.TryGetInt64(out long v))
+            return v;
+        return 0;
+    }
+
+    private static float ReadFloat(JsonElement parent, string name)
+    {
+        if (parent.TryGetProperty(name, out var p) && p.TryGetSingle(out float v))
+            return v;
+        return 0f;
+    }
+
+    private static string ReadString(JsonElement parent, string name)
+    {
+        if (parent.TryGetProperty(name, out var p))
+            return p.GetString() ?? string.Empty;
+        return string.Empty;
+    }
 }

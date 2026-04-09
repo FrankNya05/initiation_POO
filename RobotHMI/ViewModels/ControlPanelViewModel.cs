@@ -160,11 +160,11 @@ public class ControlPanelViewModel : ViewModelBase
     private async Task SendCommandAsync(CommandAction action)
     {
         // STOP always uses speed 0 — the value on the slider is irrelevant.
-        var speed   = action == CommandAction.Stop ? 0 : Speed;
-        var command = new MotorCommand(action, speed);
+        var speed        = action == CommandAction.Stop ? 0 : Speed;
+        var actionString = action.ToString().ToUpperInvariant();
 
-        // CommandSerializer is the ONLY place that knows the wire format.
-        var json = CommandSerializer.Serialize(command);
+        // CommandSerializer.BuildCmdMotor produces the V1 CMD_MOTOR envelope.
+        var json = CommandSerializer.BuildCmdMotor(actionString, speed);
 
         try
         {
@@ -193,34 +193,25 @@ public class ControlPanelViewModel : ViewModelBase
 
     /// <summary>
     /// Called by MessageRouter when an ACK message arrives from the robot.
-    ///
-    /// Expected format: { "type": "ACK", "payload": "FORWARD" }
-    ///
-    /// Implementation: lightweight — we parse only what we need (the payload
-    /// string) directly here, since ACK payloads are trivially simple and
-    /// do not warrant a dedicated parser method.
-    ///
-    /// The property update is marshalled to the UI thread as required.
+    /// V1 format: { "type": "ACK", "payload": { "command": "FORWARD" } }
+    /// Delegates parsing to TelemetryParser.ParseAckCommand.
     /// </summary>
     public void OnAckReceived(string rawJson)
     {
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(rawJson);
-            var payload = doc.RootElement
-                             .GetProperty("payload")
-                             .GetString() ?? "?";
+        // V1 ACK format: { "type": "ACK", "payload": { "command": "FORWARD" } }
+        // Delegate parsing to TelemetryParser so the format is defined in one place.
+        var command = TelemetryParser.ParseAckCommand(rawJson);
 
-            // Marshal to UI thread — this handler is called from a background thread.
-            Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                LastAckText = $"ACK: {payload}  ({DateTime.Now:HH:mm:ss})";
-            });
-        }
-        catch (Exception ex)
+        if (string.IsNullOrEmpty(command))
         {
-            Console.WriteLine($"[ControlPanelViewModel] Failed to parse ACK: {ex.Message}");
+            Console.WriteLine($"[ControlPanelViewModel] Empty or unparseable ACK: {rawJson}");
+            return;
         }
+
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            LastAckText = $"ACK: {command}  ({DateTime.Now:HH:mm:ss})";
+        });
     }
 
     // -----------------------------------------------------------------------
