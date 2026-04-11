@@ -29,15 +29,36 @@ CommunicationManager::CommunicationManager(HardwareSerial& uart_serial,
 // CHANNEL SELECTION
 // ============================================================================
 
+void CommunicationManager::configureWifi(const char* ssid,
+                                         const char* password,
+                                         const char* brokerIp,
+                                         uint16_t    brokerPort,
+                                         const char* topicPub,
+                                         const char* topicSub)
+{
+    wifi_ = std::make_unique<WiFiComm>(ssid, password, brokerIp,
+                                       brokerPort, topicPub, topicSub);
+    Serial.println("[CommManager] WiFi/MQTT channel configured.");
+}
+
 void CommunicationManager::selectChannel(CommChannel channel) {
+    // Si WiFi demandé mais non configuré, repli sur UART
+    if (channel == CommChannel::WIFI && wifi_ == nullptr) {
+        Serial.println("[CommManager] WiFi not configured, falling back to UART.");
+        channel = CommChannel::UART;
+    }
+
     current_channel_ = channel;
 
-    // Update active_comm_ to point at the right channel object.
-    // This is the ONLY place in the codebase that assigns active_comm_.
     switch (channel) {
         case CommChannel::BLE:
             active_comm_ = ble_.get();
             Serial.println("[CommManager] Active channel: BLE");
+            break;
+
+        case CommChannel::WIFI:
+            active_comm_ = wifi_.get();
+            Serial.println("[CommManager] Active channel: WiFi/MQTT");
             break;
 
         case CommChannel::UART:
@@ -46,24 +67,20 @@ void CommunicationManager::selectChannel(CommChannel channel) {
             break;
     }
 
-    // Re-apply any callbacks that were registered before the switch.
-    // This ensures the new channel fires the same callbacks as the old one.
     applyCallbacksTo(active_comm_);
 }
 
 void CommunicationManager::autoSelect() {
-    // Strategy: prefer BLE when a client is connected, otherwise use UART.
-    // This is a simple fallback policy — you can make it more sophisticated later.
+    // Priorité : BLE > WiFi/MQTT > UART
     if (ble_->isConnected()) {
-        if (current_channel_ != CommChannel::BLE) {
-            Serial.println("[CommManager] autoSelect: switching to BLE.");
+        if (current_channel_ != CommChannel::BLE)
             selectChannel(CommChannel::BLE);
-        }
+    } else if (wifi_ != nullptr && wifi_->isConnected()) {
+        if (current_channel_ != CommChannel::WIFI)
+            selectChannel(CommChannel::WIFI);
     } else {
-        if (current_channel_ != CommChannel::UART) {
-            Serial.println("[CommManager] autoSelect: BLE not connected, switching to UART.");
+        if (current_channel_ != CommChannel::UART)
             selectChannel(CommChannel::UART);
-        }
     }
 }
 
@@ -81,11 +98,13 @@ CommChannel CommunicationManager::activeChannel() const {
 // ============================================================================
 
 void CommunicationManager::begin() {
-    // Initialize both channels so they are ready to use.
-    // Even if only one is active, the other should be initialized —
-    // for example, BLE must be advertising even if we're currently on UART.
     Serial.println("[CommManager] Initializing BLE channel...");
     ble_->begin();
+
+    if (wifi_ != nullptr) {
+        Serial.println("[CommManager] Initializing WiFi/MQTT channel...");
+        wifi_->begin();
+    }
 
     Serial.println("[CommManager] Initializing UART channel...");
     uart_->begin();
@@ -126,12 +145,15 @@ void CommunicationManager::onDisconnect(std::function<void()> callback) {
 // ============================================================================
 
 void CommunicationManager::update() {
-    // UART does not generate hardware interrupts for received bytes — it must
-    // be polled. We always poll it regardless of which channel is active,
-    // so incoming bytes are never lost if the channel switches mid-message.
+    // UART : polling permanent (pas d'interruption hardware sur réception)
     uart_->update();
 
-    // If auto-select is on, evaluate whether to switch channels this cycle.
+    // WiFi/MQTT : maintenir la connexion et traiter les messages entrants.
+    // loop() doit être appelé fréquemment — on le fait ici à chaque cycle taskComm.
+    if (wifi_ != nullptr) {
+        wifi_->loop();
+    }
+
     if (auto_select_enabled_) {
         autoSelect();
     }

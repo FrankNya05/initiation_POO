@@ -38,9 +38,9 @@ public:
     // ── Remise à zéro ─────────────────────────────────────────
     void reset() {
         _x = _y = _theta = _thetaPrev = 0.0f;
-        _P[0][0] = 1.0f;  _P[0][1] = 0.0f;  _P[0][2] = 0.0f;
-        _P[1][0] = 0.0f;  _P[1][1] = 1.0f;  _P[1][2] = 0.0f;
-        _P[2][0] = 0.0f;  _P[2][1] = 0.0f;  _P[2][2] = 0.1f;
+        _cov[0][0] = 1.0f;  _cov[0][1] = 0.0f;  _cov[0][2] = 0.0f;
+        _cov[1][0] = 0.0f;  _cov[1][1] = 1.0f;  _cov[1][2] = 0.0f;
+        _cov[2][0] = 0.0f;  _cov[2][1] = 0.0f;  _cov[2][2] = 0.1f;
     }
 
     // ── Prédiction — odométrie encodeurs ─────────────────────
@@ -77,9 +77,9 @@ public:
 
         // P = F * P * F^T + Q
         float FP[3][3], FPFT[3][3];
-        _mat3Mul(F, _P, FP);
+        _mat3Mul(F, _cov, FP);
         _mat3MulT(FP, F, FPFT);
-        _mat3Add(FPFT, Q, _P);
+        _mat3Add(FPFT, Q, _cov);
     }
 
     // ── Mise à jour — gyroscope IMU ───────────────────────────
@@ -91,9 +91,9 @@ public:
         const float zMeasured  = gz * dtSec;
         const float innovation = zMeasured - (_theta - _thetaPrev);
 
-        // H = [0, 0, 1] → S = P[2][2] + R
-        const float S = _P[2][2] + _rIMU;
-        float K[3] = { _P[0][2] / S, _P[1][2] / S, _P[2][2] / S };
+        // H = [0, 0, 1] → S = cov[2][2] + R
+        const float S = _cov[2][2] + _rIMU;
+        float K[3] = { _cov[0][2] / S, _cov[1][2] / S, _cov[2][2] / S };
 
         _x     += K[0] * innovation;
         _y     += K[1] * innovation;
@@ -101,9 +101,9 @@ public:
 
         // P = (I - K*H) * P
         for (int i = 0; i < 3; i++) {
-            _P[i][0] -= K[i] * _P[2][0];
-            _P[i][1] -= K[i] * _P[2][1];
-            _P[i][2] -= K[i] * _P[2][2];
+            _cov[i][0] -= K[i] * _cov[2][0];
+            _cov[i][1] -= K[i] * _cov[2][1];
+            _cov[i][2] -= K[i] * _cov[2][2];
         }
     }
 
@@ -112,9 +112,9 @@ public:
     float getX()                const { return _x; }
     float getY()                const { return _y; }
     float getTheta()            const { return _theta; }
-    float getUncertaintyX()     const { return _P[0][0]; }
-    float getUncertaintyY()     const { return _P[1][1]; }
-    float getUncertaintyTheta() const { return _P[2][2]; }
+    float getUncertaintyX()     const { return _cov[0][0]; }
+    float getUncertaintyY()     const { return _cov[1][1]; }
+    float getUncertaintyTheta() const { return _cov[2][2]; }
 
     // ── Réglage des bruits (à calibrer selon le robot réel) ───
     void setProcessNoise(float qXY, float qTheta) { _qXY = qXY; _qTheta = qTheta; }
@@ -123,7 +123,7 @@ public:
 private:
 
     float _x = 0.0f, _y = 0.0f, _theta = 0.0f, _thetaPrev = 0.0f;
-    float _P[3][3] = {};
+    float _cov[3][3] = {};   // matrice de covariance (evite le conflit avec le macro _P de newlib)
 
     float _qXY    = 0.5f;   // bruit processus position  (mm²/mm parcouru)
     float _qTheta = 0.1f;   // bruit processus cap       (rad²/rad tourné)

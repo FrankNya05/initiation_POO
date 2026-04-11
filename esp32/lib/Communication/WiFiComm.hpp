@@ -125,4 +125,4 @@ public:
     }
 };
 
-WiFiComm* WiFiComm::_instance = nullptr;
+inline WiFiComm* WiFiComm::_instance = nullptr;

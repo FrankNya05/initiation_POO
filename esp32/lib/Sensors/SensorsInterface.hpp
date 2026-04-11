@@ -9,7 +9,8 @@
 class SensorsInterface {
 public:
     virtual ~SensorsInterface() = default;
-    virtual bool  init()              = 0;
-    virtual bool  update()            = 0;
-    virtual SensorData getData() const  = 0;
+    virtual bool        init()            = 0;
+    virtual bool        update()          = 0;
+    virtual SensorData  getData()  const  = 0;
+    virtual const char* typeId()   const  { return ""; }
 };

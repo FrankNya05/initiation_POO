@@ -15,18 +15,19 @@ private:
 
     static uint8_t positionToPin(SensorPosition pos) {
         switch (pos) {
-            case SensorPosition::LEFT:       return RobotConfig::LINE_SENSOR_FRONT_LEFT;
-            case SensorPosition::RIGHT:      return RobotConfig::LINE_SENSOR_FRONT_RIGHT;
+            case SensorPosition::FRONT_LEFT:  return RobotConfig::LINE_SENSOR_FRONT_LEFT;
+            case SensorPosition::FRONT_RIGHT: return RobotConfig::LINE_SENSOR_FRONT_RIGHT;
             case SensorPosition::BACK:        return RobotConfig::LINE_SENSOR_BACK;
             default:
-                // Valeur invalide — assert ou log recommandé
-                return 0xFF;
+                return 0xFF;  // Pin invalide
         }
     }
 
 public:
     LineSensor(SensorPosition p, int s)
         : position(p), pin(positionToPin(p)), seuil(s) {}
+
+    const char* typeId() const override { return "LINE"; }
 
     bool init() override {
         if (pin == 0xFF) return false;  // Pin invalide

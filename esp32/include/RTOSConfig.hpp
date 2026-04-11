@@ -25,6 +25,7 @@ namespace RTOSConfig {
     constexpr uint32_t STACK_COMM      = 8192;  // WiFi + MQTT (gros stack requis)
     constexpr uint32_t STACK_LOGGER    = 2048;  // Serial.print centralisé
     constexpr uint32_t STACK_ENCODER   = 2048;  // Lecture compteurs interruption
+    constexpr uint32_t STACK_COMMAND   = 3072;  // Parsing commandes + séquences
 
     // ── Priorités (0=plus basse, 24=plus haute sur ESP32) ───────
     // Règle : plus le timing est critique, plus la priorité est haute
@@ -32,6 +33,7 @@ namespace RTOSConfig {
     constexpr UBaseType_t PRIO_MOTORS    = 4;   // Critique — contrôle moteurs
     constexpr UBaseType_t PRIO_SENSORS   = 3;   // Haute    — lecture capteurs
     constexpr UBaseType_t PRIO_STRATEGY  = 2;   // Normale  — décision robot
+    constexpr UBaseType_t PRIO_COMMAND   = 2;   // Normale  — commandes HMI
     constexpr UBaseType_t PRIO_COMM      = 1;   // Basse    — WiFi/MQTT
     constexpr UBaseType_t PRIO_LOGGER    = 1;   // Basse    — Serial debug
 
@@ -44,6 +46,7 @@ namespace RTOSConfig {
     constexpr BaseType_t CORE_COMM      = 0;    // obligatoire pour WiFi
     constexpr BaseType_t CORE_LOGGER    = 0;
     constexpr BaseType_t CORE_ENCODER   = 1;    // temps-réel → Core 1
+    constexpr BaseType_t CORE_COMMAND   = 1;    // traitement commandes → Core 1
 
     // ── Périodes de mise à jour (ms → ticks) ────────────────────
     constexpr TickType_t PERIOD_SENSORS   = pdMS_TO_TICKS(20);   // 50 Hz

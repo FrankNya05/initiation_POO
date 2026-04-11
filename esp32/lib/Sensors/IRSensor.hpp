@@ -12,6 +12,8 @@ public:
     TOFSensor(uint8_t addr, SensorPosition position)
         : _config{addr, position} {}
 
+    const char* typeId() const override { return TYPE_ID; }
+
     bool init() override {
         Wire.begin(TOF_SDA, TOF_SCL);
         Wire.setClock(400000);

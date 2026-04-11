@@ -1,6 +1,6 @@
 #pragma once
-#include <vector>
 #include <cstring>
+#include <vector>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include "SensorsInterface.hpp"
@@ -133,10 +133,31 @@ public:
      * @return SensorData avec isValid=false si non trouvé ou inactif.
      */
     SensorData getDataByPosition(SensorPosition pos) const {
-        SensorData result{};   // isValid = false par défaut
+        SensorData result{};
         if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
             for (const auto& entry : _sensors) {
                 if (entry.enabled && entry.sensor->getData().position == pos) {
+                    result = entry.sensor->getData();
+                    break;
+                }
+            }
+            xSemaphoreGive(_mutex);
+        }
+        return result;
+    }
+
+    /**
+     * Retourne la donnée d'un capteur par position ET type.
+     * Utile quand plusieurs capteurs partagent la même position (ex: TOF et Line).
+     * @param type  Chaîne retournée par typeId() ("TOF", "LINE", ...)
+     */
+    SensorData getDataByPositionAndType(SensorPosition pos, const char* type) const {
+        SensorData result{};
+        if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            for (const auto& entry : _sensors) {
+                if (entry.enabled
+                    && entry.sensor->getData().position == pos
+                    && strcmp(entry.sensor->typeId(), type) == 0) {
                     result = entry.sensor->getData();
                     break;
                 }

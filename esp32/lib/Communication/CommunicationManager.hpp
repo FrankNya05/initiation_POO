@@ -3,6 +3,7 @@
 #include "ICommInterface.hpp"
 #include "RobotBLEServer.hpp"
 #include "UARTComm.hpp"
+#include "WiFiComm.hpp"
 
 #include <memory>      // std::unique_ptr
 #include <functional>
@@ -65,6 +66,7 @@
 // enum class prevents name collisions (no bare "BLE" in the global scope).
 enum class CommChannel {
     BLE,
+    WIFI,   // MQTT over WiFi — priorité intermédiaire
     UART
 };
 
@@ -87,9 +89,17 @@ public:
     // Typically called before begin(), or between matches.
     void selectChannel(CommChannel channel);
 
+    // Configure le canal WiFi/MQTT (optionnel — appeler avant begin()).
+    // Si non appelé, le canal WiFi reste désactivé.
+    void configureWifi(const char* ssid,
+                       const char* password,
+                       const char* brokerIp,
+                       uint16_t    brokerPort = 1883,
+                       const char* topicPub   = "robot/data",
+                       const char* topicSub   = "robot/commande");
+
     // Automatically pick the best available channel.
-    // Logic: if BLE is connected → use BLE. Otherwise → fall back to UART.
-    // Call this periodically for dynamic failover.
+    // Priorité : BLE > WiFi > UART
     void autoSelect();
 
     // Enable or disable automatic channel switching inside update()
@@ -131,9 +141,11 @@ public:
 
 private:
     // --- Owned channels ---
-    // CommunicationManager is responsible for the lifetime of both channels.
+    // CommunicationManager is responsible for the lifetime of all channels.
     // unique_ptr guarantees they are destroyed when CommunicationManager is destroyed.
+    // wifi_ reste nullptr si configureWifi() n'a pas été appelé.
     std::unique_ptr<RobotBLEServer> ble_;
+    std::unique_ptr<WiFiComm>       wifi_;   // nullptr si WiFi non configuré
     std::unique_ptr<UARTComm>       uart_;
 
     // --- Active channel pointer (raw pointer = observer, NOT owner) ---
