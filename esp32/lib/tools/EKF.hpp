@@ -86,26 +86,30 @@ public:
     //  Appeler à chaque cycle taskSensors (50 Hz)
     //  @param gz    vitesse angulaire Z en rad/s
     //  @param dtSec intervalle de temps en secondes
-    void updateIMU(float gz, float dtSec) {
+   void updateIMU(float gz, float dtSec) {
+    const float zMeasured = gz * dtSec;
+    // Calcul de la variation d'angle vue par les encodeurs
+    float dThetaEncoder = _theta - _thetaPrev;
+    
+    // Innovation = (Mesure IMU) - (Estimation Encodeurs)
+    float innovation = _wrapAngle(zMeasured - dThetaEncoder);
 
-        const float zMeasured  = gz * dtSec;
-        const float innovation = zMeasured - (_theta - _thetaPrev);
+    const float S = _cov[2][2] + _rIMU;
+    float K[3] = { _cov[0][2] / S, _cov[1][2] / S, _cov[2][2] / S };
 
-        // H = [0, 0, 1] → S = cov[2][2] + R
-        const float S = _cov[2][2] + _rIMU;
-        float K[3] = { _cov[0][2] / S, _cov[1][2] / S, _cov[2][2] / S };
+    // Correction de l'état
+    _x     += K[0] * innovation;
+    _y     += K[1] * innovation;
+    _theta  = _wrapAngle(_theta + K[2] * innovation);
 
-        _x     += K[0] * innovation;
-        _y     += K[1] * innovation;
-        _theta  = _wrapAngle(_theta + K[2] * innovation);
-
-        // P = (I - K*H) * P
-        for (int i = 0; i < 3; i++) {
-            _cov[i][0] -= K[i] * _cov[2][0];
-            _cov[i][1] -= K[i] * _cov[2][1];
-            _cov[i][2] -= K[i] * _cov[2][2];
-        }
+    // Mise à jour de la covariance P = (I - KH)P
+    for (int i = 0; i < 3; i++) {
+        float row2 = _cov[2][i]; // H est [0, 0, 1]
+        _cov[i][0] -= K[i] * _cov[2][0];
+        _cov[i][1] -= K[i] * _cov[2][1];
+        _cov[i][2] -= K[i] * _cov[2][2];
     }
+}
 
     // ── Accesseurs ────────────────────────────────────────────
     Pose  getPose()             const { return { _x, _y, _theta }; }

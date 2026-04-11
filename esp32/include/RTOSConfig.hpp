@@ -10,7 +10,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 // ─── Debug (commenter pour désactiver tout log) ────────────────
-#define DEBUG_ENABLED
+//#define DEBUG_ENABLED
 
 // ───────────────────────────────────────────────────────────────
 //  Constantes des tâches
