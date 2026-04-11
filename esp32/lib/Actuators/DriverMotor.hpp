@@ -49,7 +49,8 @@ public:
         return true;
     }
 
-    void setSpeed(int leftSpeed, int rightSpeed) override {
+    void 
+    setSpeed(int leftSpeed, int rightSpeed) override {
         _setMotor(_pinL_DIR, _pinL_PWM,
                   RobotConfig::PWM_CHANNEL_LEFT_DIR,  RobotConfig::PWM_CHANNEL_LEFT,  leftSpeed);
         _setMotor(_pinR_DIR, _pinR_PWM,

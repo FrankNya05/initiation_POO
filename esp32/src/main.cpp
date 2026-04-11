@@ -1,141 +1,60 @@
+// ============================================
+//  Test moteurs - ESP32 + DRV8833 (avec PWM)
+//  AIN1 (GPIO26) et BIN2 (GPIO14) = digital seulement
+// ============================================
 #include <Arduino.h>
-#include "WiFiComm.hpp"
-#include "RTOSConfig.hpp"
-#include "SensorManger.hpp"
-#include "LineSensor.hpp"
-#include "IRSensor.hpp"
-#include "PinConfig.hpp"
-#include "BattSensor.hpp"
-#include <ArduinoJson.h>
 
+#define AIN1  26   // digital seulement (DAC2)
+#define AIN2  25   // gpio25 = in4
+#define BIN1  27   // PWM
+#define BIN2  14   // digital seulement
 
-std::string serializeSensorData(const SensorData& data) {
-    StaticJsonDocument<256> doc;
-
-    doc["ts"]    = data.timestamp;
-    doc["pos"]   = (int)data.position;
-    doc["valid"] = data.isValid;
-
-    // Scalar ou Vector selon le type de capteur
-    if (data.dims == SensorDims::VEC3) {
-        JsonObject val = doc.createNestedObject("val");
-        val["x"] = round(data.value.vector.x * 1000) / 1000.0;  // distance
-        val["y"] = round(data.value.vector.y * 10)   / 10.0;     // angle
-        val["z"] = (int)data.value.vector.z;                      // nb points
-    } else {
-        doc["val"] = round(data.value.scalar * 1000) / 1000.0;
-    }
-
-    std::string output;
-    serializeJson(doc, output);
-    return output.c_str();
-}
-
-// ── Instanciation ─────────────────────────────────────────────────
-WiFiComm comm(
-    "S21",           // ssid
-    "ftel7488",         // password
-    "10.164.172.249",     // broker IP
-    1883,                 // port
-    "robot/data",         // topic publication
-    "robot/commande"      // topic abonnement
-);
-SensorManager sensorManager;
-=======
-DriverMotor driver;
-DriverManager divices;
->>>>>>> b215584e08a6b66950a8b05360cafe94028d3953:src/main.cpp
+#define CH_AIN2  2
+#define CH_BIN1  3
+#define PWM_FREQ  20000
+#define PWM_RES   8  // 0-255
 
 void setup() {
-    Serial.begin(115200);
-    delay(1000);
+  Serial.begin(115200);
 
-    Serial.println("=== SETUP START ===");
+  pinMode(AIN1, OUTPUT);
+  pinMode(BIN2, OUTPUT);
 
-    encLeft.init(true);
-    encRight.init(false);
-    Serial.println("Encodeurs initialisés");
+  ledcSetup(CH_AIN2, PWM_FREQ, PWM_RES);
+  ledcSetup(CH_BIN1, PWM_FREQ, PWM_RES);
+  ledcAttachPin(AIN2, CH_AIN2);
+  ledcAttachPin(BIN1, CH_BIN1);
 
-    divices.add(&driver, DriverRole::MAIN, true);
-    if (!divices.initAll()) {
-        Serial.println("ERREUR init moteurs!");
-    } else {
-        Serial.println("Moteurs initialisés");
-    }
-
-    encLeft.resetAngle();
-    encRight.resetAngle();
-    Serial.println("=== SETUP DONE ===");
+  Serial.println("Test moteurs pret");
 }
-static float nextTarget = 5.0f;
-static bool  goingBack  = false;  // false = 0→360, true = 360→0
-static uint32_t startMs = 0;
-static bool started     = false;
-static uint32_t lastPrintMs = 0;
+
+// Avancer : moteur A slow decay, moteur B fast decay → même vitesse effective
+// v : 0-255
+void avancer(int v) {
+  digitalWrite(AIN1, HIGH); ledcWrite(CH_AIN2, 255 - v); // slow decay : AIN1=H, AIN2=PWM(255-v)
+  ledcWrite(CH_BIN1, v);    digitalWrite(BIN2, LOW);      // fast decay : BIN1=PWM(v), BIN2=L
+}
+
+// Reculer : moteur A fast decay, moteur B slow decay → même vitesse effective
+// v : 0-255
+void reculer(int v) {
+  digitalWrite(AIN1, LOW);  ledcWrite(CH_AIN2, v);        // fast decay : AIN1=L, AIN2=PWM(v)
+  ledcWrite(CH_BIN1, 255 - v); digitalWrite(BIN2, HIGH);  // slow decay : BIN1=PWM(255-v), BIN2=H
+}
+
+void stopMoteurs() {
+  digitalWrite(AIN1, LOW); ledcWrite(CH_AIN2, 0);
+  ledcWrite(CH_BIN1, 0);   digitalWrite(BIN2, LOW);
+}
 
 void loop() {
-    uint32_t now = millis();
+  Serial.println("Stop");
+  stopMoteurs();
+  delay(1000);
 
-    if (!started) {
-        startMs = now;
-        started = true;
-        nextTarget = 5.0f;
-        Serial.println("Moteur démarré ! (0° → 360°)");
-    }
-
-    float angleL = encLeft.getRelativeAngleDeg();
-    float angleR = encRight.getRelativeAngleDeg();
-
-    if (now - lastPrintMs >= 200) {
-        Serial.printf("angle L = %6.1f° | angle R = %6.1f°\n", angleL, angleR);
-        lastPrintMs = now;
-    }
-
-    if (!goingBack) {
-        // Aller : 0 → 360
-        divices.move(RobotConstants::Direction::AVANT, 80);
-
-        if (angleL >= nextTarget) {
-            Serial.printf(">>> Palier %5.1f° atteint !\n", nextTarget);
-            nextTarget += 5.0f;
-        }
-
-        if (angleL >= 360.0f) {
-            uint32_t elapsed = now - startMs;
-            Serial.printf("--- 360° atteint en %lu ms (%.2f s) ---\n",
-                          elapsed, elapsed / 1000.0f);
-
-            // Préparer retour
-            goingBack  = true;
-            nextTarget = 360.0f - 5.0f; // paliers décroissants
-            encLeft.resetAngle();
-            encRight.resetAngle();
-            startMs = now;
-            Serial.println("Retour : 360° → 0°");
-        }
-    } else {
-        // Retour : 360 → 0
-        divices.move(RobotConstants::Direction::ARRIERE, 80);
-
-        float absAngle = -angleL; // angle négatif en arrière
-
-        if (absAngle >= (360.0f - nextTarget)) {
-            Serial.printf(">>> Palier %5.1f° atteint !\n", nextTarget);
-            nextTarget -= 5.0f;  // Décrémenter
-        }
-
-        if (absAngle >= 360.0f) {
-            uint32_t elapsed = now - startMs;
-            Serial.printf("--- Retour 0° atteint en %lu ms (%.2f s) ---\n",
-                          elapsed, elapsed / 1000.0f);
-
-            // Préparer prochain aller
-            goingBack  = false;
-            nextTarget = 5.0f;
-            encLeft.resetAngle();
-            encRight.resetAngle();
-            startMs = now;
-            Serial.println("Nouvel aller : 0° → 360°");
-        }
-    }
+  Serial.println("Reculer (v=200)");
+  reculer(200);
+  delay(5000);
+avancer(255);
+ delay(5000);
 }

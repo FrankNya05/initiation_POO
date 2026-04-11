@@ -1,11 +1,8 @@
-
-
 #pragma once
 #include "SensorsInterface.hpp"
 #include "SensorTypes.hpp"
 #ifdef ARDUINO
 #include <Arduino.h>
-#include <stdexcept>
 #include "PinConfig.hpp"
 #endif
 
@@ -14,26 +11,34 @@ private:
     SensorData     data;
     SensorPosition position;
     uint8_t        pin;
-    static uint8_t positionToPin(SensorPosition pos){
+    int            seuil;
+
+    static uint8_t positionToPin(SensorPosition pos) {
         switch (pos) {
-            case SensorPosition::LEFT:  return RobotConfig::LINE_SENSOR_FRONT_LEFT;
-            case SensorPosition::RIGHT: return RobotConfig::LINE_SENSOR_FRONT_RIGHT;
-            case SensorPosition::BACK:  return RobotConfig::LINE_SENSOR_BACK;
-            default: return 0;
+            case SensorPosition::LEFT:       return RobotConfig::LINE_SENSOR_FRONT_LEFT;
+            case SensorPosition::RIGHT:      return RobotConfig::LINE_SENSOR_FRONT_RIGHT;
+            case SensorPosition::BACK:        return RobotConfig::LINE_SENSOR_BACK;
+            default:
+                // Valeur invalide — assert ou log recommandé
+                return 0xFF;
         }
     }
 
 public:
-    LineSensor(SensorPosition p) :position(p), pin(positionToPin(p)){}
+    LineSensor(SensorPosition p, int s)
+        : position(p), pin(positionToPin(p)), seuil(s) {}
+
     bool init() override {
+        if (pin == 0xFF) return false;  // Pin invalide
         pinMode(pin, INPUT);
         return true;
     }
 
     bool update() override {
-        data.value    = SensorValue(analogRead(pin) ? 2048.0f : 0.0f); 
-        data.position = position;
-        data.isValid  = true;
+        int valeur = analogRead(pin);
+        data.value     = SensorValue(valeur < seuil ? 1.0f : 0.0f);
+        data.position  = position;
+        data.isValid   = true;
         data.timestamp = millis();
         return true;
     }

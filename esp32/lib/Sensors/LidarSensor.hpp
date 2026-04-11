@@ -180,7 +180,7 @@ private:
     // ─────────────────────────────────────────────
     void _publishData() {
 
-        _data.position = SensorPosition::CENTER;
+        _data.position = SensorPosition::FRONT;
         _data.timestamp = millis();
         _data.dims = SensorDims::VEC3;
 

@@ -17,19 +17,30 @@ enum class SensorType
     LINE,
     ULTRASONIC,
     TOFSensor,
-    IMU
+    IMU,
+    SWITCH
+};
+
+enum class PressType : uint8_t {
+    NONE  = 0,
+    SHORT = 1,  // appui court  (< LONG_PRESS_MS, hors double-clic)
+    LONG  = 2,  // appui long   (>= LONG_PRESS_MS)
+    RAPID = 3,  // double appui rapide
 };
 
 enum status{ RUN,NO_RUN};
 
 enum class SensorPosition
 {
-    LEFT,
-    RIGHT,
-    FRONT,
-    BACK,
-    CENTER,
-    UNKNOWN
+    LEFT,         // Encodeur gauche
+    RIGHT,        // Encodeur droit
+    FRONT,        // Lidar (obstacle le plus proche — distance + angle)
+    BACK,         // LineSensor arrière
+    CENTER,       // IMU (MPU6050)
+    FRONT_LEFT,   // TOF avant-gauche, LineSensor avant-gauche
+    FRONT_RIGHT,  // TOF avant-droit,  LineSensor avant-droit
+    BATTERY,      // Capteur de batterie
+    UNKNOWN       // Valeur par défaut / non assigné
 };
 
  struct TOFConfig{

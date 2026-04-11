@@ -1,24 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\GEI_1076_Labs\\initiation_POO\\RobotHMI\\RobotHMI.csproj": {}
+    "C:\\Users\\sylva\\Desktop\\Bureau\\hiver_2026\\poo\\projet_mini_sumo\\initiation_POO\\RobotHMI\\RobotHMI.csproj": {}
   },
   "projects": {
-    "C:\\GEI_1076_Labs\\initiation_POO\\RobotHMI\\RobotHMI.csproj": {
+    "C:\\Users\\sylva\\Desktop\\Bureau\\hiver_2026\\poo\\projet_mini_sumo\\initiation_POO\\RobotHMI\\RobotHMI.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\GEI_1076_Labs\\initiation_POO\\RobotHMI\\RobotHMI.csproj",
+        "projectUniqueName": "C:\\Users\\sylva\\Desktop\\Bureau\\hiver_2026\\poo\\projet_mini_sumo\\initiation_POO\\RobotHMI\\RobotHMI.csproj",
         "projectName": "RobotHMI",
-        "projectPath": "C:\\GEI_1076_Labs\\initiation_POO\\RobotHMI\\RobotHMI.csproj",
-        "packagesPath": "C:\\Users\\arman\\.nuget\\packages\\",
-        "outputPath": "C:\\GEI_1076_Labs\\initiation_POO\\RobotHMI\\obj\\",
+        "projectPath": "C:\\Users\\sylva\\Desktop\\Bureau\\hiver_2026\\poo\\projet_mini_sumo\\initiation_POO\\RobotHMI\\RobotHMI.csproj",
+        "packagesPath": "C:\\Users\\sylva\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\sylva\\Desktop\\Bureau\\hiver_2026\\poo\\projet_mini_sumo\\initiation_POO\\RobotHMI\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\arman\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config"
+          "C:\\Users\\sylva\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -36,7 +32,13 @@
           "warnAsError": [
             "NU1605"
           ]
-        }
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net8.0": {
@@ -86,12 +88,30 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[8.0.23, 8.0.23]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Host.win-x64",
+              "version": "[8.0.23, 8.0.23]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[8.0.23, 8.0.23]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[8.0.23, 8.0.23]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.100/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
