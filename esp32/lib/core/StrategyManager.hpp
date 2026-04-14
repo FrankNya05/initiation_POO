@@ -14,7 +14,6 @@
 //
 //  Utilisation dans l'architecture FreeRTOS :
 //  - taskStrategy appelle executeStrategy() toutes les 50 ms
-//  - Le résultat (ActionCommand) est envoyé à taskMotors via Queue
 // ═══════════════════════════════════════════════════════════════
 
 class StrategyManager {
