@@ -13,9 +13,9 @@
 //  - IMU gz (gyroscope Z)                → correction du cap
 //
 //  Paramètres robot (depuis RobotConstants.hpp) :
-//  - Diamètre roue    : WHEEL_DIAMETER_MM
-//  - Entraxe          : WHEELBASE_MM
-//  - Pulses/tour      : PULSES_PER_REV
+//  - Diamètre roue    : WHEEL_DIAMETER_MM  (30 mm)
+//  - Entraxe          : WHEELBASE_MM       (56 mm)
+//  - Pulses/tour      : PULSES_PER_REV     (2800)
 //
 //  Usage :
 //      EKF ekf;

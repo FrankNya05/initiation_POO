@@ -63,7 +63,7 @@ enum class MotorSide : uint8_t {
     constexpr float WHEEL_CIRCUMFERENCE_MM = 3.14159f * WHEEL_DIAMETER_MM;
     constexpr float WHEELBASE_MM           = 56.0f;   // entraxe centre roue gauche → droite
 
-    // Angle par pulse (déduit de PULSES_PER_REV = 840)
+    // Angle par pulse (déduit de PULSES_PER_REV = 2800)
     constexpr float DEG_PER_PULSE = 360.0f / PULSES_PER_REV;   // ~0.4286°
     constexpr float RAD_PER_PULSE = 6.28318f / PULSES_PER_REV; // ~0.007480 rad
 
