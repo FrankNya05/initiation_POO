@@ -59,7 +59,7 @@ enum class MotorSide : uint8_t {
     constexpr int   GEAR_RATIO         = 100;  // JGA12-N20 100:1 (validé expérimentalement)
     constexpr int   PULSES_PER_REV     = ENCODER_PPR * ENCODER_QUADRATURE * GEAR_RATIO; // 2800
 
-    constexpr float WHEEL_DIAMETER_MM      = 50.0f;
+    constexpr float WHEEL_DIAMETER_MM      = 30.0f;
     constexpr float WHEEL_CIRCUMFERENCE_MM = 3.14159f * WHEEL_DIAMETER_MM;
     constexpr float WHEELBASE_MM           = 56.0f;   // entraxe centre roue gauche → droite
 

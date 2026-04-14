@@ -78,7 +78,7 @@ inline RobotCommand parseCommand(const char* raw) {
         cmd.type = CommandType::POSE_RESET;
     }
     else if (strcmp(raw, "MOTOR:STOP") == 0) {
-        cmd.type = CommandType::MOTOR_STOP;
+        cmd.type = CommandType::STOP;   // alias de STOP — met aussi l'état en STANDBY
     }
     else if (strncmp(raw, "STRATEGY:", 9) == 0) {
         cmd.type = CommandType::STRATEGY;
