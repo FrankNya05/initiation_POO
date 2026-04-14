@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <math.h>
+#include "RobotConstants.hpp"
 
 // ═══════════════════════════════════════════════════════════════
 //  EKF.hpp — Filtre de Kalman Étendu pour localisation 2D
@@ -11,10 +12,10 @@
 //  - Encodeurs (odométrie différentielle) → prédiction
 //  - IMU gz (gyroscope Z)                → correction du cap
 //
-//  Paramètres robot :
-//  - Diamètre roue    : 50 mm
-//  - Entraxe          : 56 mm
-//  - Pulses/tour      : 2800 (7 * 4 * 100)
+//  Paramètres robot (depuis RobotConstants.hpp) :
+//  - Diamètre roue    : WHEEL_DIAMETER_MM
+//  - Entraxe          : WHEELBASE_MM
+//  - Pulses/tour      : PULSES_PER_REV
 //
 //  Usage :
 //      EKF ekf;
@@ -133,9 +134,9 @@ private:
     float _qTheta = 0.1f;   // bruit processus cap       (rad²/rad tourné)
     float _rIMU   = 0.01f;  // bruit mesure gyroscope    (rad²)
 
-    static constexpr float WHEEL_DIAMETER = 50.0f;
-    static constexpr float WHEELBASE      = 56.0f;
-    static constexpr float PULSES_PER_REV = 2800.0f;
+    static constexpr float WHEEL_DIAMETER = RobotConstants::WHEEL_DIAMETER_MM;
+    static constexpr float WHEELBASE      = RobotConstants::WHEELBASE_MM;
+    static constexpr float PULSES_PER_REV = static_cast<float>(RobotConstants::PULSES_PER_REV);
     static constexpr float MM_PER_PULSE   = (3.14159f * WHEEL_DIAMETER) / PULSES_PER_REV;
 
     static float _wrapAngle(float a) {
