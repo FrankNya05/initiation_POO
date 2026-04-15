@@ -1,0 +1,83 @@
+┌──────────────────────────────────────────────┐
+│                 RTOS Tasks                  │
+└──────────────────────────────────────────────┘
+        │             │              │
+        │             │              │
+        ▼             ▼              ▼
+┌────────────┐  ┌──────────────┐  ┌───────────────┐
+│ SensorTask │  │ MotorTask    │  │ CommTask      │
+└────────────┘  └──────────────┘  └───────────────┘
+        │             │              │
+        │             │              │
+        ▼             ▼              ▼
+   Sensors/       Actuators/    Communication/
+   config/        config/       config/
+        │             │              │
+        └─────────────┼──────────────┘
+                      ▼
+               Core / RobotContext
+
+📌 Détail des tâches
+SensorTask
+- Rôle: Lire les capteurs périodiquement et mettre à jour le RobotContext.
+- Période: par ex. TASK_SENSOR_PERIOD_MS = 10.
+- Utilise:
+- Sensors/ (drivers capteurs)
+- config/PinConfig.hpp
+- config/RobotConstants.hpp
+- Sortie:
+- Met à jour les valeurs dans RobotContext
+- envoie des messages dans une queue (ex: SensorDataQueue)
+
+📌 Détail des tâches
+SensorTask
+- Rôle: Lire les capteurs périodiquement et mettre à jour le RobotContext.
+- Période: par ex. TASK_SENSOR_PERIOD_MS = 10.
+- Utilise:
+- Sensors/ (drivers capteurs)
+- config/PinConfig.hpp
+- config/RobotConstants.hpp
+- Sortie:
+- Met à jour les valeurs dans RobotContext
+- (optionnel) envoie des messages dans une queue (ex: SensorDataQueue)
+
+MotorTask
+- Rôle: Appliquer les décisions du Core aux moteurs.
+- Période: par ex. TASK_MOTOR_PERIOD_MS = 5.
+- Utilise:
+- Actuators/ (drivers moteurs)
+- RobotContext (consignes vitesse/direction)
+- config/MotorConfig.hpp (si tu crées ce fichier)
+- Sortie:
+- Commande les moteurs (PWM, direction)
+- Peut lire des flags/états dans RobotContext
+
+CommTask
+- Rôle: Gérer la communication (BLE/WiFi) et les commandes externes.
+- Période: par ex. TASK_COMM_PERIOD_MS = 20 ou event-driven.
+- Utilise:
+- Communication/ (BLEComm, WiFiComm, CommandParser)
+- config/CommConfig.hpp
+- RobotContext (pour lire/écrire des états/ordres)
+- Sortie:
+- Reçoit des commandes → met à jour RobotContext
+- Envoie des infos de debug / télémétrie
+
+📬 Queues et échanges possibles
+SensorTask  ──>  SensorDataQueue  ──>  Core / RobotContext
+CommTask    ──>  CommandQueue     ──>  Core / RobotContext
+Core        ──>  MotorCommandQueue ─> MotorTask
+
+
+
+🧠 Rôle du RobotContext
+- Sert de point central pour :
+- l’état du robot (mode, cible, erreurs…)
+- les dernières valeurs capteurs
+- les consignes moteurs
+- Accédé par :
+- SensorTask (écrit les mesures)
+- CommTask (écrit des ordres, lit l’état)
+- MotorTask (lit les consignes)
+- La logique Core (peut tourner dans une tâche dédiée si tu veux)
+
