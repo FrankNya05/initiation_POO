@@ -1,12 +1,18 @@
 #pragma once
 
 #include "ICommInterface.hpp"
+<<<<<<< HEAD
 #include "WiFiComm.hpp"
 #include "ProtocolTypes.hpp"
 #include "TelemetrySerializer.hpp"
 #include "CommandParser.hpp"
 #include "RobotConstants.hpp"
 #include "RTOSConfig.hpp"
+=======
+#include "RobotBLEServer.hpp"
+#include "UARTComm.hpp"
+#include "WiFiComm.hpp"
+>>>>>>> origin/main
 
 #include <memory>
 #include <functional>
@@ -67,6 +73,18 @@
  *   - Delegation: formatting → TelemetrySerializer, parsing → CommandParser
  *   - Callbacks: std::function for flexible, decoupled event handling
  */
+<<<<<<< HEAD
+=======
+
+// Identifies which channel is currently active.
+// enum class prevents name collisions (no bare "BLE" in the global scope).
+enum class CommChannel {
+    BLE,
+    WIFI,   // MQTT over WiFi — priorité intermédiaire
+    UART
+};
+
+>>>>>>> origin/main
 class CommunicationManager {
 public:
 
@@ -98,8 +116,39 @@ public:
     // Lifecycle
     // -----------------------------------------------------------------------
 
+<<<<<<< HEAD
     // Connects to WiFi and MQTT. Call once in setup().
     // Also registers callbacks on the secondary channel if one was provided.
+=======
+    // Manually select which channel should be active.
+    // Typically called before begin(), or between matches.
+    void selectChannel(CommChannel channel);
+
+    // Configure le canal WiFi/MQTT (optionnel — appeler avant begin()).
+    // Si non appelé, le canal WiFi reste désactivé.
+    void configureWifi(const char* ssid,
+                       const char* password,
+                       const char* brokerIp,
+                       uint16_t    brokerPort = 1883,
+                       const char* topicPub   = "robot/data",
+                       const char* topicSub   = "robot/commande");
+
+    // Automatically pick the best available channel.
+    // Priorité : BLE > WiFi > UART
+    void autoSelect();
+
+    // Enable or disable automatic channel switching inside update()
+    void setAutoSelectEnabled(bool enabled);
+
+    // Returns which channel is currently active
+    CommChannel activeChannel() const;
+
+    // -----------------------------------------------------------------------
+    // ICommInterface delegation (forwarded to the active channel)
+    // -----------------------------------------------------------------------
+
+    // Initialize all owned channels and start the active one.
+>>>>>>> origin/main
     void begin();
 
     // Must be called every loop iteration (or from a FreeRTOS task).
@@ -188,6 +237,16 @@ public:
     void sendRaw(const std::string& data);
 
 private:
+<<<<<<< HEAD
+=======
+    // --- Owned channels ---
+    // CommunicationManager is responsible for the lifetime of all channels.
+    // unique_ptr guarantees they are destroyed when CommunicationManager is destroyed.
+    // wifi_ reste nullptr si configureWifi() n'a pas été appelé.
+    std::unique_ptr<RobotBLEServer> ble_;
+    std::unique_ptr<WiFiComm>       wifi_;   // nullptr si WiFi non configuré
+    std::unique_ptr<UARTComm>       uart_;
+>>>>>>> origin/main
 
     // ── Primary transport: WiFiComm (owned) ───────────────────────────────
     std::unique_ptr<WiFiComm> wifi_;

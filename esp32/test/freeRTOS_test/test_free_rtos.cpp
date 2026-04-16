@@ -24,7 +24,7 @@ void taskSensors(void* pv)
    // Serial.printf("BATT | %.3f V | %d%% \n", batt.getVoltage(), batt.getPercent());
    // vTaskDelay(pdMS_TO_TICKS(500));
    vTaskDelayUntil(&xLastWake,pdMS_TO_TICKS(500));
-
+        
     }
 }
 
@@ -49,7 +49,7 @@ void setup ()
 
      //g_muxtex = xSemaphoreCreateMutex();
     g_logMutex  = xSemaphoreCreateMutex();
-    g_battQueue =  xQueueCreate(5,sizeof(float));
+    g_battQueue =  xQueueCreate(5,sizeof(SensorData));
 
 
      xTaskCreatePinnedToCore(

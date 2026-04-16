@@ -54,6 +54,18 @@ namespace RobotConfig {
     constexpr uint8_t ENCODER_MOTOR_RIGHT_H = 5;
  
     // --- Commande Freinage BJT ---
-    // Pin de sortie stable pour le transistor
-    constexpr uint8_t BJT_COMMAND = 23;
+    // Pin de sortie defaut drb8833 
+    constexpr uint8_t UTL_DRV8833 = 23;
+
+    // --- LED RGB (PWM via ledc canaux 4-6) ---
+    constexpr uint8_t LED_PIN_R = 13;
+    constexpr uint8_t LED_PIN_G = 12;
+    constexpr uint8_t LED_PIN_B = 2;
+
+    // Canaux ledc dédiés LED (0-3 réservés aux moteurs)
+    constexpr int PWM_CHANNEL_LED_R = 4;
+    constexpr int PWM_CHANNEL_LED_G = 5;
+    constexpr int PWM_CHANNEL_LED_B = 6;
+
+    constexpr int PWM_FREQUENCY_LED = 5000;  // 5 kHz suffisant pour LED
 }

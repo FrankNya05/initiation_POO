@@ -27,6 +27,7 @@ public:
     //  Reçoit l'état complet du robot, retourne une commande moteur.
     //  Appelée par StrategyManager::executeStrategy() depuis taskStrategy.
     virtual RobotConstants::ActionCommand execute(RobotContext& ctx) = 0;
+  
 
     // ── Nom de la stratégie ───────────────────────────────────
     //  Utilisé pour le debug et le LOG.
