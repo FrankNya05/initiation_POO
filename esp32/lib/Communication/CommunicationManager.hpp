@@ -1,18 +1,9 @@
 #pragma once
 
 #include "ICommInterface.hpp"
-<<<<<<< HEAD
-#include "WiFiComm.hpp"
-#include "ProtocolTypes.hpp"
-#include "TelemetrySerializer.hpp"
-#include "CommandParser.hpp"
-#include "RobotConstants.hpp"
-#include "RTOSConfig.hpp"
-=======
 #include "RobotBLEServer.hpp"
 #include "UARTComm.hpp"
 #include "WiFiComm.hpp"
->>>>>>> origin/main
 
 #include <memory>
 #include <functional>
