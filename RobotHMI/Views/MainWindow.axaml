@@ -9,68 +9,66 @@
         MinWidth="800" MinHeight="480"
         Background="#0F1923">
 
-    <!-- MODIFIÉ V2 — Structure complète : barre haute + 4 onglets + barre basse -->
+    <!-- MODIFIÉ V2 — Structure : barre haute + 5 onglets + barre basse -->
 
     <Grid RowDefinitions="Auto,*,Auto">
 
         <!-- ═══════════════════════════════════════════════════════════════
-             BARRE SUPÉRIEURE FIXE — visible sur tous les onglets
-             Hauteur ~50px, infos clés : titre, IP, connexion, batterie, état
+             BARRE SUPÉRIEURE FIXE
              ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="0"
                 Background="#1C2B3A"
                 BorderBrush="#2A3F55"
                 BorderThickness="0,0,0,1"
                 Padding="12,8">
-            <panels:StatusBarTopView/>
+            <panels:StatusBarTopView DataContext="{Binding}"/>
         </Border>
 
         <!-- ═══════════════════════════════════════════════════════════════
-             NAVIGATION 4 ONGLETS
+             NAVIGATION 5 ONGLETS
              ═══════════════════════════════════════════════════════════════ -->
         <TabControl Grid.Row="1"
                     SelectedIndex="{Binding SelectedTabIndex}"
                     Background="#0F1923">
 
-            <!-- ────────────────────────────────────────────────────────
-                 ONGLET 1 — CONTRÔLE (par défaut)
-                 ──────────────────────────────────────────────────────── -->
+            <!-- Onglet 0 — CONTRÔLE -->
             <TabItem Header="⚔  CONTRÔLE">
                 <panels:ControlPanelView DataContext="{Binding ControlPanel}"/>
             </TabItem>
 
-            <!-- ────────────────────────────────────────────────────────
-                 ONGLET 2 — TÉLÉMÉTRIE
-                 ──────────────────────────────────────────────────────── -->
+            <!-- Onglet 1 — TÉLÉMÉTRIE -->
             <TabItem Header="📊  TÉLÉMÉTRIE">
                 <panels:TelemetryPanelView DataContext="{Binding TelemetryPanel}"/>
             </TabItem>
 
-            <!-- ────────────────────────────────────────────────────────
-                 ONGLET 3 — MOTEURS (tests)
-                 ──────────────────────────────────────────────────────── -->
+            <!-- Onglet 2 — MOTEURS -->
             <TabItem Header="🔧  MOTEURS">
                 <panels:MotorTestPanelView DataContext="{Binding MotorTestPanel}"/>
             </TabItem>
 
-            <!-- ────────────────────────────────────────────────────────
-                 ONGLET 4 — LOGS
-                 ──────────────────────────────────────────────────────── -->
+            <!-- Onglet 3 — LOGS -->
             <TabItem Header="📋  LOGS">
                 <panels:LogPanelView DataContext="{Binding LogPanel}"/>
+            </TabItem>
+
+            <!-- Onglet 4 — CONNEXION (NOUVEAU V2) -->
+            <!-- Le ConnectionPanelView existant est réutilisé tel quel.
+                 La barre haute reste inchangée et affiche toujours le statut. -->
+            <TabItem Header="🔌  CONNEXION">
+                <panels:ConnectionPanelView DataContext="{Binding ConnectionPanel}"/>
             </TabItem>
 
         </TabControl>
 
         <!-- ═══════════════════════════════════════════════════════════════
-             BARRE INFÉRIEURE FIXE — dernier message LOG + timestamp
+             BARRE INFÉRIEURE FIXE
              ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="2"
                 Background="#1C2B3A"
                 BorderBrush="#2A3F55"
                 BorderThickness="0,1,0,0"
                 Padding="12,6">
-            <panels:StatusBarBottomView/>
+            <panels:StatusBarBottomView DataContext="{Binding}"/>
         </Border>
 
     </Grid>

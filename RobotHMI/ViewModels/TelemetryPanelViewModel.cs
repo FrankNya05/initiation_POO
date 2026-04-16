@@ -139,6 +139,86 @@ public class TelemetryPanelViewModel : ViewModelBase
         LidarValid ? "● Cible détectée" : "○ Aucune cible";  // MODIFIÉ V2
 
     // -----------------------------------------------------------------------
+    // Coordonnées radar — MODIFIÉ V2
+    // -----------------------------------------------------------------------
+    // Le Canvas du radar a une taille fixe définie ici.
+    // Le robot est toujours au centre-bas du canvas.
+    // L'axe Y est inversé (0 = haut dans Avalonia).
+    //
+    // Convention angle : 0° = devant le robot, sens horaire.
+    // Conversion polaire → cartésien :
+    //   x = cx + dist_normalisée * sin(angle_rad)
+    //   y = cy - dist_normalisée * cos(angle_rad)   ← Y inversé
+
+    // Dimensions du canvas (doivent correspondre au Width/Height dans le AXAML)
+    public const double RadarCanvasWidth  = 400;
+    public const double RadarCanvasHeight = 300;
+
+    // Distance max affichée sur le radar (en mètres)
+    private const double MaxRadarDist = 2.0;
+
+    private double _radarX = RadarCanvasWidth / 2;
+    /// <summary>Position X du point ennemi sur le Canvas, en pixels.</summary>
+    public double RadarX
+    {
+        get => _radarX;
+        private set
+        {
+            if (SetField(ref _radarX, value))
+                OnPropertyChanged(nameof(RadarDotLeft));
+        }
+    }
+
+    private double _radarY = RadarCanvasHeight / 2;
+    /// <summary>Position Y du point ennemi sur le Canvas, en pixels.</summary>
+    public double RadarY
+    {
+        get => _radarY;
+        private set
+        {
+            if (SetField(ref _radarY, value))
+                OnPropertyChanged(nameof(RadarDotTop));
+        }
+    }
+
+    // Canvas.Left/Top du coin supérieur gauche de l'ellipse (rayon = 8px)
+    /// <summary>Canvas.Left de l'ellipse du point ennemi (centré sur RadarX).</summary>
+    public double RadarDotLeft => RadarX - 8;
+    /// <summary>Canvas.Top de l'ellipse du point ennemi (centré sur RadarY).</summary>
+    public double RadarDotTop  => RadarY - 8;
+
+    /// <summary>
+    /// Recalcule la position du point ennemi sur le canvas radar.
+    /// Appelé après chaque mise à jour des données lidar.
+    /// </summary>
+    private void UpdateRadarPosition()
+    {
+        // Centre du canvas = position du robot
+        double cx = RadarCanvasWidth / 2.0;
+        double cy = RadarCanvasHeight - 20; // robot légèrement au-dessus du bas
+
+        if (!LidarValid || LidarDist <= 0)
+        {
+            // Aucune cible — cacher le point en le plaçant hors du canvas
+            RadarX = -50;
+            RadarY = -50;
+            return;
+        }
+
+        // Normaliser la distance dans la hauteur du canvas
+        double distNorm = Math.Min(LidarDist / MaxRadarDist, 1.0);
+        double pixelDist = distNorm * (RadarCanvasHeight - 30);
+
+        // Conversion polaire → cartésien (angle en degrés → radians)
+        double angleRad = LidarAngle * Math.PI / 180.0;
+        double px = cx + pixelDist * Math.Sin(angleRad);
+        double py = cy - pixelDist * Math.Cos(angleRad); // Y inversé
+
+        RadarX = px;
+        RadarY = py;
+    }
+
+    // -----------------------------------------------------------------------
     // État du robot — MODIFIÉ V2
     // -----------------------------------------------------------------------
 
@@ -210,6 +290,7 @@ public class TelemetryPanelViewModel : ViewModelBase
             LidarDist  = data.LidarDist;
             LidarAngle = data.LidarAngle;
             LidarValid = data.LidarValid;
+            UpdateRadarPosition(); // MODIFIÉ V2 — recalcul position radar
 
             LastUpdateText = DateTime.Now.ToString("HH:mm:ss.fff");
         });
