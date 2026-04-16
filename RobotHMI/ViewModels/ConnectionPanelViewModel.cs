@@ -128,7 +128,7 @@ public class ConnectionPanelViewModel : ViewModelBase
         set => SetField(ref _mqttPort, value);
     }
 
-    private string _mqttTelemetryTopic = "robot/data";
+    private string _mqttTelemetryTopic = "robot/telemetry";
 
     /// <summary>Topic the HMI subscribes to for incoming robot data.</summary>
     public string MqttTelemetryTopic
@@ -137,7 +137,7 @@ public class ConnectionPanelViewModel : ViewModelBase
         set => SetField(ref _mqttTelemetryTopic, value);
     }
 
-    private string _mqttCommandTopic = "robot/commande";
+    private string _mqttCommandTopic = "robot/cmd";
 
     /// <summary>Topic the HMI publishes motor commands to.</summary>
     public string MqttCommandTopic
