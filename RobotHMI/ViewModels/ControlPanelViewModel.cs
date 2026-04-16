@@ -8,33 +8,21 @@ namespace RobotHMI.ViewModels;
 // ---------------------------------------------------------------------------
 // ControlPanelViewModel — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// Pilote l'onglet CONTRÔLE :
-//   - Boutons START / STOP / RESET
-//   - Sélection de stratégie (ADAMANTINE / BERSERKER / CIRCLE)
-//   - Affichage de l'ACK reçu du robot
+// Pilote l'onglet CONTRÔLE : START / STOP / RESET + sélection stratégie.
 //
-// Règles architecturales :
-//   - N'écrit jamais de string de commande directement — passe par CommandSerializer
-//   - Reçoit les ACK via le MessageRouter (handler OnAckReceived)
+// Correction V2 :
+//   - Tous les appels SendAsync dans un try/catch (MODIFIÉ V2)
+//   - Erreur affichée dans LastCommandText sans crasher l'application
 // ---------------------------------------------------------------------------
 
 public class ControlPanelViewModel : ViewModelBase
 {
-    // -----------------------------------------------------------------------
-    // Dépendances
-    // -----------------------------------------------------------------------
-
     private readonly RobotCommunicationService _commService;
-
-    // -----------------------------------------------------------------------
-    // Constructeur
-    // -----------------------------------------------------------------------
 
     public ControlPanelViewModel(RobotCommunicationService commService)
     {
         _commService = commService;
 
-        // Création des commandes ICommand → chaque bouton de la Vue se lie à une commande
         StartCommand  = new AsyncRelayCommand(OnStartAsync);
         StopCommand   = new AsyncRelayCommand(OnStopAsync);
         ResetCommand  = new AsyncRelayCommand(OnResetAsync);
@@ -45,7 +33,7 @@ public class ControlPanelViewModel : ViewModelBase
     }
 
     // -----------------------------------------------------------------------
-    // Commandes — boutons du match
+    // Commandes match
     // -----------------------------------------------------------------------
 
     public ICommand StartCommand  { get; }
@@ -53,26 +41,16 @@ public class ControlPanelViewModel : ViewModelBase
     public ICommand ResetCommand  { get; }
 
     private async Task OnStartAsync()
-    {
-        // CommandSerializer produit la string brute "START"
-        await _commService.SendAsync(CommandSerializer.SerializeRobotCommand("START"));
-        LastCommandText = "Envoyé : START";
-    }
+        => await SendSafe(CommandSerializer.SerializeRobotCommand("START"), "Envoyé : START");
 
     private async Task OnStopAsync()
-    {
-        await _commService.SendAsync(CommandSerializer.SerializeRobotCommand("STOP"));
-        LastCommandText = "Envoyé : STOP";
-    }
+        => await SendSafe(CommandSerializer.SerializeRobotCommand("STOP"), "Envoyé : STOP");
 
     private async Task OnResetAsync()
-    {
-        await _commService.SendAsync(CommandSerializer.SerializeRobotCommand("RESET"));
-        LastCommandText = "Envoyé : RESET";
-    }
+        => await SendSafe(CommandSerializer.SerializeRobotCommand("RESET"), "Envoyé : RESET");
 
     // -----------------------------------------------------------------------
-    // Commandes — sélection stratégie
+    // Commandes stratégie
     // -----------------------------------------------------------------------
 
     public ICommand StrategyAdamantineCommand { get; }
@@ -81,10 +59,6 @@ public class ControlPanelViewModel : ViewModelBase
 
     private string _activeStrategy = string.Empty;
 
-    /// <summary>
-    /// Nom de la stratégie active ("ADAMANTINE", "BERSERKER", "CIRCLE" ou vide).
-    /// Le View utilise cette valeur pour mettre en surbrillance le bon bouton.
-    /// </summary>
     public string ActiveStrategy
     {
         get => _activeStrategy;
@@ -92,7 +66,6 @@ public class ControlPanelViewModel : ViewModelBase
         {
             if (SetField(ref _activeStrategy, value))
             {
-                // Notifier la Vue que l'apparence des 3 boutons doit se mettre à jour
                 OnPropertyChanged(nameof(IsAdamantineActive));
                 OnPropertyChanged(nameof(IsBerserkerActive));
                 OnPropertyChanged(nameof(IsCircleActive));
@@ -100,49 +73,69 @@ public class ControlPanelViewModel : ViewModelBase
         }
     }
 
-    // Propriétés booléennes pour appliquer le style "actif" dans la Vue
     public bool IsAdamantineActive => ActiveStrategy == "ADAMANTINE";
     public bool IsBerserkerActive  => ActiveStrategy == "BERSERKER";
     public bool IsCircleActive     => ActiveStrategy == "CIRCLE";
 
     private async Task OnStrategyAsync(string strategyName)
+        => await SendSafe(
+               CommandSerializer.SerializeStrategy(strategyName),
+               $"Envoyé : STRATEGY:{strategyName}",
+               () => ActiveStrategy = strategyName);
+
+    // -----------------------------------------------------------------------
+    // SendSafe — MODIFIÉ V2
+    // -----------------------------------------------------------------------
+    // Wrapper commun avec try/catch.
+    // onSuccess : action optionnelle exécutée sur le UI thread si l'envoi réussit.
+
+    private async Task SendSafe(string rawCommand, string successText,
+                                Action? onSuccess = null)
     {
-        // CommandSerializer produit "STRATEGY:BERSERKER" etc.
-        await _commService.SendAsync(CommandSerializer.SerializeStrategy(strategyName));
-        ActiveStrategy  = strategyName;
-        LastCommandText = $"Envoyé : STRATEGY:{strategyName}";
+        try
+        {
+            await _commService.SendAsync(rawCommand);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                LastCommandText = successText;
+                onSuccess?.Invoke();
+            });
+        }
+        catch (Exception ex)
+        {
+            // MODIFIÉ V2 — afficher l'erreur sans crasher
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                LastCommandText = $"⚠ Non connecté — {ex.Message}";
+            });
+        }
     }
 
     // -----------------------------------------------------------------------
-    // Affichage du dernier retour
+    // Handler ACK
     // -----------------------------------------------------------------------
 
-    private string _lastCommandText = "Aucune commande envoyée";
-
-    /// <summary>Texte de la dernière commande envoyée ou ACK reçu.</summary>
-    public string LastCommandText
-    {
-        get => _lastCommandText;
-        private set => SetField(ref _lastCommandText, value);
-    }
-
-    // -----------------------------------------------------------------------
-    // Handler — ACK reçu du robot (appelé par MessageRouter)
-    // -----------------------------------------------------------------------
-
-    /// <summary>
-    /// Appelé par MessageRouter sur un thread de fond quand un ACK arrive.
-    /// Met à jour l'interface sur le thread UI.
-    /// </summary>
     public void OnAckReceived(string rawJson)
     {
         var ackPayload = TelemetryParser.ParseAck(rawJson);
         if (ackPayload == null) return;
 
-        // Toujours marshaller vers le thread UI avant de modifier des propriétés bindées
         Dispatcher.UIThread.InvokeAsync(() =>
         {
             LastCommandText = $"ACK reçu : {ackPayload}";
         });
+    }
+
+    // -----------------------------------------------------------------------
+    // Feedback
+    // -----------------------------------------------------------------------
+
+    private string _lastCommandText = "Aucune commande envoyée";
+
+    public string LastCommandText
+    {
+        get => _lastCommandText;
+        private set => SetField(ref _lastCommandText, value);
     }
 }
