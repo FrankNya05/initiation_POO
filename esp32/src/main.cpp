@@ -197,6 +197,18 @@ void setup() {
     commManager.begin();
     commManager.setAutoSelectEnabled(true);
 
+    // ── Communication WiFi/MQTT ──────────────────────────────
+    commManager.configureWifi(
+        "NomDeTonHotspot",      // SSID de ton téléphone
+        "MotDePasse",           // mot de passe
+        "192.168.x.x",          // IP fixe du Raspberry Pi
+        1883,                   // port Mosquitto (défaut)
+        "robot/data",           // topic ESP32 → Pi
+        "robot/commande"        // topic Pi → ESP32
+    );
+    commManager.selectChannel(CommChannel::WIFI);
+    // Note : commManager.begin() est appelé dans taskComm — ne pas le doubler ici
+    
     // ── Queue commandes ───────────────────────
     RobotQueues::init();
 
