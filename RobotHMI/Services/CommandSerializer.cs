@@ -1,108 +1,119 @@
-using System.Text;
-using System.Text.Json;
 using RobotHMI.Models;
 
 namespace RobotHMI.Services;
 
 // ---------------------------------------------------------------------------
-// CommandSerializer — V1 protocol
+// CommandSerializer — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// The ONLY place in the application that knows the shape of outgoing messages.
+// Seul endroit de l'application qui connaît le format des commandes envoyées.
+// Convertit les objets modèles en strings brutes MQTT.
 //
-// V1 outgoing message formats:
+// IMPORTANT : Le firmware ESP32 attend des strings brutes — PAS du JSON.
+// Le topic "robot/commande" reçoit des strings comme "START", "MOTOR:L:200:R:200".
 //
-//   CMD_MOTOR (motor movement):
-//   { "type": "CMD_MOTOR", "payload": { "action": "FORWARD", "speed": 150 } }
+// Changements V2 :
+//   - Suppression totale de la sérialisation JSON (MODIFIÉ V2)
+//   - Serialize(MotorCommand) → string brute (MODIFIÉ V2)
+//   - Ajout de méthodes statiques pour toutes les commandes robot (MODIFIÉ V2)
 //
-//   CMD_ROBOT (robot-level commands):
-//   { "type": "CMD_ROBOT", "payload": { "command": "START", "param": "" } }
-//
-// Design:
-//   - Static class with no state — easy to understand and test.
-//   - Uses Utf8JsonWriter for compact, allocation-friendly serialisation.
-//   - Speed is clamped 0–255 so no invalid value ever reaches the robot.
+// Exemples de strings produites :
+//   SerializeRobotCommand("START")     → "START"
+//   SerializeRobotCommand("STOP")      → "STOP"
+//   SerializeStrategy("BERSERKER")     → "STRATEGY:BERSERKER"
+//   Serialize(MotorCommand.Direct(...))→ "MOTOR:L:200:R:200"
+//   Serialize(MotorCommand.Stop())     → "MOTOR:STOP"
+//   SerializePid("KP", 1.5f)          → "PID:KP:1.5"
 // ---------------------------------------------------------------------------
 
 public static class CommandSerializer
 {
-    private static readonly JsonWriterOptions _options = new() { Indented = false };
-
     // -----------------------------------------------------------------------
-    // BuildCmdMotor
+    // Commandes robot générales
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Builds a CMD_MOTOR JSON string for a motion command.
-    ///
-    /// Output: { "type": "CMD_MOTOR", "payload": { "action": "FORWARD", "speed": 150 } }
-    ///
-    /// Called by ControlPanelViewModel for all five direction buttons.
-    /// The action string should already be uppercase (FORWARD, BACKWARD,
-    /// LEFT, RIGHT, STOP) — the caller is responsible for the conversion.
+    /// Sérialise une commande robot simple (START, STOP, RESET).
+    /// Retourne la string telle quelle — c'est ce que le firmware attend.
     /// </summary>
-    public static string BuildCmdMotor(string action, int speed)
+    public static string SerializeRobotCommand(string command)  // MODIFIÉ V2
     {
-        speed = Math.Clamp(speed, 0, 255);
+        // Validation défensive : on s'assure que la commande est une string valide.
+        if (string.IsNullOrWhiteSpace(command))
+            throw new ArgumentException("La commande ne peut pas être vide.", nameof(command));
 
-        using var stream = new System.IO.MemoryStream();
-        using var writer = new Utf8JsonWriter(stream, _options);
-
-        writer.WriteStartObject();
-        writer.WriteString("type", "CMD_MOTOR");
-        writer.WriteStartObject("payload");
-        writer.WriteString("action", action);
-        writer.WriteNumber("speed",  speed);
-        writer.WriteEndObject();
-        writer.WriteEndObject();
-        writer.Flush();
-
-        return Encoding.UTF8.GetString(stream.ToArray());
+        return command.Trim().ToUpperInvariant();
     }
 
     // -----------------------------------------------------------------------
-    // BuildCmdRobot
+    // Commandes stratégie
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Builds a CMD_ROBOT JSON string for a robot-level command.
-    ///
-    /// Output: { "type": "CMD_ROBOT", "payload": { "command": "START", "param": "" } }
-    ///
-    /// V1 robot-level commands:
-    ///   BuildCmdRobot("START",        "")           → start autonomous match
-    ///   BuildCmdRobot("STOP",         "")           → emergency stop
-    ///   BuildCmdRobot("SET_STRATEGY", "AGGRESSIVE") → change strategy
-    ///   BuildCmdRobot("RESET",        "")           → reset robot state
+    /// Sérialise une sélection de stratégie.
+    /// Exemple : "BERSERKER" → "STRATEGY:BERSERKER"
+    /// Stratégies valides : "ADAMANTINE", "BERSERKER", "CIRCLE"
     /// </summary>
-    public static string BuildCmdRobot(string command, string param = "")
+    public static string SerializeStrategy(string strategyName)  // MODIFIÉ V2
     {
-        using var stream = new System.IO.MemoryStream();
-        using var writer = new Utf8JsonWriter(stream, _options);
+        if (string.IsNullOrWhiteSpace(strategyName))
+            throw new ArgumentException("Le nom de stratégie ne peut pas être vide.", nameof(strategyName));
 
-        writer.WriteStartObject();
-        writer.WriteString("type", "CMD_ROBOT");
-        writer.WriteStartObject("payload");
-        writer.WriteString("command", command);
-        writer.WriteString("param",   param);
-        writer.WriteEndObject();
-        writer.WriteEndObject();
-        writer.Flush();
-
-        return Encoding.UTF8.GetString(stream.ToArray());
+        return $"STRATEGY:{strategyName.Trim().ToUpperInvariant()}";
     }
 
     // -----------------------------------------------------------------------
-    // Serialize (kept for backward compatibility during transition)
+    // Commandes moteur — MODIFIÉ V2
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Legacy entry point — wraps BuildCmdMotor using a MotorCommand model.
-    /// ControlPanelViewModel now calls BuildCmdMotor() directly, but this
-    /// method is kept so no other call site breaks.
+    /// Sérialise une commande moteur en string brute.
+    ///
+    /// Exemples de sortie :
+    ///   Direct(200, 200)   → "MOTOR:L:200:R:200"   (avance)
+    ///   Direct(-200, -200) → "MOTOR:L:-200:R:-200"  (recule)
+    ///   Direct(-150, 150)  → "MOTOR:L:-150:R:150"   (tourne gauche)
+    ///   Stop()             → "MOTOR:STOP"
     /// </summary>
-    public static string Serialize(MotorCommand command)
+    public static string Serialize(MotorCommand command)  // MODIFIÉ V2
     {
-        var actionString = command.Action.ToString().ToUpperInvariant();
-        return BuildCmdMotor(actionString, command.Speed);
+        return command.Type switch
+        {
+            MotorCommandType.Stop => "MOTOR:STOP",
+
+            MotorCommandType.Direct => BuildMotorDirect(command.LeftSpeed, command.RightSpeed),
+
+            _ => throw new ArgumentOutOfRangeException(nameof(command.Type),
+                     $"Type de commande moteur inconnu : {command.Type}")
+        };
+    }
+
+    /// <summary>
+    /// Construit la string moteur directe avec clamping des vitesses.
+    /// Les vitesses sont limitées à [-255, 255] pour protéger le hardware.
+    /// </summary>
+    private static string BuildMotorDirect(int left, int right)  // MODIFIÉ V2
+    {
+        var l = Math.Clamp(left,  -255, 255);
+        var r = Math.Clamp(right, -255, 255);
+        return $"MOTOR:L:{l}:R:{r}";
+    }
+
+    // -----------------------------------------------------------------------
+    // Commandes PID
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Sérialise une valeur de paramètre PID.
+    /// Exemple : SerializePid("KP", 1.5f) → "PID:KP:1.5"
+    /// Paramètres valides : "KP", "KI", "KD"
+    /// </summary>
+    public static string SerializePid(string parameter, float value)  // MODIFIÉ V2
+    {
+        if (string.IsNullOrWhiteSpace(parameter))
+            throw new ArgumentException("Le paramètre PID ne peut pas être vide.", nameof(parameter));
+
+        // Formatage sans virgule de groupement, point comme séparateur décimal.
+        // Exemple : 1.5f → "1.5" (pas "1,5" qui dépend de la locale)
+        return $"PID:{parameter.Trim().ToUpperInvariant()}:{value.ToString("G", System.Globalization.CultureInfo.InvariantCulture)}";
     }
 }

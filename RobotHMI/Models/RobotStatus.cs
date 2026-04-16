@@ -1,25 +1,30 @@
 namespace RobotHMI.Models;
 
 // ---------------------------------------------------------------------------
-// RobotStatus
+// RobotStatus — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// Mirrors the operating-state values the ESP32 sends in a STATE message:
-//   { "type": "STATE", "payload": "RUNNING" }
+// Enum des états opérationnels du robot, aligné sur le protocole V1.
 //
-// TelemetryParser converts the raw string payload into this enum.
-// TelemetryPanelViewModel exposes the parsed value as an observable property.
+// Mapping protocole → enum :
+//   "IDLE"    → Idle     (en attente, avant le départ)
+//   "SEARCH"  → Search   (rotation/scan, adversaire non détecté)
+//   "ATTACK"  → Attack   (adversaire détecté, charge à pleine vitesse)
+//   "DEFENSE" → Defense  (ligne détectée, manœuvre de récupération)
 //
-// Unknown strings received from the robot are mapped to Unknown so the
-// UI can display something meaningful without crashing.
+// Changements V2 :
+//   - Supprimés : Running, Searching, Attacking, Retreating, Error (MODIFIÉ V2)
+//   - Ajoutés   : Search, Attack, Defense (MODIFIÉ V2)
+//   - Conservé  : Idle, Unknown
+//
+// Note : côté ESP32, l'état STANDBY → "IDLE", EVADE → "DEFENSE".
+// Le TelemetryParser fait le mapping string → enum.
 // ---------------------------------------------------------------------------
 
 public enum RobotStatus
 {
-    Unknown,
-    Idle,
-    Running,
-    Searching,
-    Attacking,
-    Retreating,
-    Error
+    Unknown,   // Fallback — état non reconnu ou pas encore reçu
+    Idle,      // MODIFIÉ V2 — "IDLE"    : en attente du signal de départ
+    Search,    // MODIFIÉ V2 — "SEARCH"  : recherche de l'adversaire
+    Attack,    // MODIFIÉ V2 — "ATTACK"  : attaque en cours
+    Defense    // MODIFIÉ V2 — "DEFENSE" : évitement de la ligne blanche
 }

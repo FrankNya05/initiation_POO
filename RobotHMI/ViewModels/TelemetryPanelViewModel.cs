@@ -5,24 +5,58 @@ using RobotHMI.Services;
 namespace RobotHMI.ViewModels;
 
 // ---------------------------------------------------------------------------
-// TelemetryPanelViewModel — V1 protocol
+// TelemetryPanelViewModel — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// Drives the TelemetryPanelView.
+// Expose les données de télémétrie comme propriétés observables pour la Vue.
 //
-// V1 data received via OnTelemetryReceived:
-//   - Timestamp
-//   - Battery (voltage, percent, critical)
-//   - Line sensors (frontLeft, frontRight, backLeft, back)
-//   - Lidar (dist, angle, valid)
-//
-// Threading rule: all SetField calls happen inside Dispatcher.UIThread.InvokeAsync
-// because MessageRouter calls these handlers from a background thread.
+// Changements V2 :
+//   - Supprimés : IrFront, IrLeft, IrRight (plus dans le protocole V1)
+//   - Supprimés : LineBackRight → LineBack (MODIFIÉ V2)
+//   - Ajoutés   : BatteryVoltage, BatteryPercent, BatteryCritical (MODIFIÉ V2)
+//   - Ajoutés   : LidarDist, LidarAngle, LidarValid (MODIFIÉ V2)
+//   - Mis à jour: RobotStatusText → 4 états V1 (MODIFIÉ V2)
 // ---------------------------------------------------------------------------
 
 public class TelemetryPanelViewModel : ViewModelBase
 {
     // -----------------------------------------------------------------------
-    // Line sensor properties
+    // Batterie — MODIFIÉ V2
+    // -----------------------------------------------------------------------
+
+    private float _batteryVoltage;
+    /// <summary>Tension en Volts (ex: 7.35).</summary>
+    public float BatteryVoltage
+    {
+        get => _batteryVoltage;
+        private set
+        {
+            if (SetField(ref _batteryVoltage, value))
+                OnPropertyChanged(nameof(BatteryVoltageText));
+        }
+    }
+
+    /// <summary>Affichage formaté ex: "7.35 V".</summary>
+    public string BatteryVoltageText =>
+        $"{BatteryVoltage:F2} V";  // MODIFIÉ V2
+
+    private int _batteryPercent;
+    /// <summary>Pourcentage batterie 0-100.</summary>
+    public int BatteryPercent
+    {
+        get => _batteryPercent;
+        private set => SetField(ref _batteryPercent, value);
+    }
+
+    private bool _batteryCritical;
+    /// <summary>True = batterie critique, badge d'alerte visible.</summary>
+    public bool BatteryCritical
+    {
+        get => _batteryCritical;
+        private set => SetField(ref _batteryCritical, value);
+    }
+
+    // -----------------------------------------------------------------------
+    // Capteurs de ligne — MODIFIÉ V2
     // -----------------------------------------------------------------------
 
     private bool _lineFrontLeft;
@@ -46,11 +80,8 @@ public class TelemetryPanelViewModel : ViewModelBase
         private set => SetField(ref _lineBackLeft, value);
     }
 
-    /// <summary>
-    /// V1 uses a single rear sensor ("back"), not separate backLeft/backRight.
-    /// The View binds to LineBack for the rear indicator.
-    /// </summary>
     private bool _lineBack;
+    /// <summary>MODIFIÉ V2 — était LineBackRight, renommé en LineBack.</summary>
     public bool LineBack
     {
         get => _lineBack;
@@ -58,73 +89,61 @@ public class TelemetryPanelViewModel : ViewModelBase
     }
 
     // -----------------------------------------------------------------------
-    // Battery properties
-    // -----------------------------------------------------------------------
-
-    private float _batteryVoltage;
-    /// <summary>Battery voltage in volts (e.g. 7.4).</summary>
-    public float BatteryVoltage
-    {
-        get => _batteryVoltage;
-        private set
-        {
-            if (SetField(ref _batteryVoltage, value))
-                OnPropertyChanged(nameof(BatteryVoltageText));
-        }
-    }
-
-    /// <summary>Formatted voltage string for display, e.g. "7.4 V".</summary>
-    public string BatteryVoltageText => $"{BatteryVoltage:F1} V";
-
-    private int _batteryPercent;
-    /// <summary>State of charge, 0–100.</summary>
-    public int BatteryPercent
-    {
-        get => _batteryPercent;
-        private set => SetField(ref _batteryPercent, value);
-    }
-
-    private bool _batteryCritical;
-    /// <summary>True when the battery is critically low — can drive a warning colour in the View.</summary>
-    public bool BatteryCritical
-    {
-        get => _batteryCritical;
-        private set => SetField(ref _batteryCritical, value);
-    }
-
-    // -----------------------------------------------------------------------
-    // Lidar properties
+    // Lidar — MODIFIÉ V2
     // -----------------------------------------------------------------------
 
     private float _lidarDist;
-    /// <summary>Lidar distance (float, as sent by ESP32).</summary>
+    /// <summary>Distance en mètres (ex: 0.42).</summary>
     public float LidarDist
     {
         get => _lidarDist;
-        private set => SetField(ref _lidarDist, value);
+        private set
+        {
+            if (SetField(ref _lidarDist, value))
+                OnPropertyChanged(nameof(LidarDistText));
+        }
     }
 
+    /// <summary>Affichage formaté ex: "0.42 m".</summary>
+    public string LidarDistText => $"{LidarDist:F2} m";  // MODIFIÉ V2
+
     private float _lidarAngle;
-    /// <summary>Lidar target angle in degrees (float, as sent by ESP32).</summary>
+    /// <summary>Angle en degrés (ex: 45.0).</summary>
     public float LidarAngle
     {
         get => _lidarAngle;
-        private set => SetField(ref _lidarAngle, value);
+        private set
+        {
+            if (SetField(ref _lidarAngle, value))
+                OnPropertyChanged(nameof(LidarAngleText));
+        }
     }
 
+    /// <summary>Affichage formaté ex: "45.0°".</summary>
+    public string LidarAngleText => $"{LidarAngle:F1}°";  // MODIFIÉ V2
+
     private bool _lidarValid;
-    /// <summary>True when the lidar reading is valid (target in range).</summary>
+    /// <summary>True = cible valide détectée.</summary>
     public bool LidarValid
     {
         get => _lidarValid;
-        private set => SetField(ref _lidarValid, value);
+        private set
+        {
+            if (SetField(ref _lidarValid, value))
+                OnPropertyChanged(nameof(LidarStatusText));
+        }
     }
 
+    /// <summary>Texte d'état lidar affiché dans la Vue.</summary>
+    public string LidarStatusText =>
+        LidarValid ? "● Cible détectée" : "○ Aucune cible";  // MODIFIÉ V2
+
     // -----------------------------------------------------------------------
-    // Robot state
+    // État du robot — MODIFIÉ V2
     // -----------------------------------------------------------------------
 
     private RobotStatus _robotStatus = RobotStatus.Unknown;
+
     public RobotStatus RobotStatus
     {
         get => _robotStatus;
@@ -135,21 +154,25 @@ public class TelemetryPanelViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Texte d'état affiché dans la Vue.
+    /// MODIFIÉ V2 — aligné sur les 4 états V1.
+    /// </summary>
     public string RobotStatusText => RobotStatus switch
     {
-        RobotStatus.Idle       => "IDLE",
-        RobotStatus.Searching  => "SEARCH",
-        RobotStatus.Attacking  => "ATTACK",
-        RobotStatus.Retreating => "DEFENSE",
-        RobotStatus.Error      => "ERROR",
-        _                      => "—"
+        RobotStatus.Idle    => "IDLE",
+        RobotStatus.Search  => "SEARCH",    // MODIFIÉ V2
+        RobotStatus.Attack  => "ATTACK",    // MODIFIÉ V2
+        RobotStatus.Defense => "DEFENSE",   // MODIFIÉ V2
+        _                   => "—"
     };
 
     // -----------------------------------------------------------------------
-    // Timestamp / last update
+    // Horodatage de la dernière mise à jour
     // -----------------------------------------------------------------------
 
-    private string _lastUpdateText = "No data yet";
+    private string _lastUpdateText = "Aucune donnée";
+
     public string LastUpdateText
     {
         get => _lastUpdateText;
@@ -157,44 +180,43 @@ public class TelemetryPanelViewModel : ViewModelBase
     }
 
     // -----------------------------------------------------------------------
-    // Message handlers — called by MessageRouter on a background thread
+    // Handlers — appelés par MessageRouter sur thread de fond
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Called by MessageRouter when a TELEMETRY message arrives.
-    /// Delegates parsing to TelemetryParser, then updates UI on the UI thread.
+    /// Appelé par MessageRouter quand un message TELEMETRY arrive.
+    /// Le parsing se fait ici hors UI thread, puis les propriétés sont
+    /// mises à jour sur le UI thread via Dispatcher.
     /// </summary>
     public void OnTelemetryReceived(string rawJson)
     {
         var data = TelemetryParser.ParseTelemetry(rawJson);
-        if (data == null)
-            return;
+        if (data == null) return;
 
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            // Line sensors
-            LineFrontLeft  = data.Line.FrontLeft;
-            LineFrontRight = data.Line.FrontRight;
-            LineBackLeft   = data.Line.BackLeft;
-            LineBack       = data.Line.Back;
+            // Batterie — MODIFIÉ V2
+            BatteryVoltage  = data.BatteryVoltage;
+            BatteryPercent  = data.BatteryPercent;
+            BatteryCritical = data.BatteryCritical;
 
-            // Battery
-            BatteryVoltage  = data.Battery.Voltage;
-            BatteryPercent  = data.Battery.Percent;
-            BatteryCritical = data.Battery.Critical;
+            // Ligne
+            LineFrontLeft  = data.LineFrontLeft;
+            LineFrontRight = data.LineFrontRight;
+            LineBackLeft   = data.LineBackLeft;
+            LineBack       = data.LineBack;  // MODIFIÉ V2
 
-            // Lidar
-            LidarDist  = data.Lidar.Dist;
-            LidarAngle = data.Lidar.Angle;
-            LidarValid = data.Lidar.Valid;
+            // Lidar — MODIFIÉ V2
+            LidarDist  = data.LidarDist;
+            LidarAngle = data.LidarAngle;
+            LidarValid = data.LidarValid;
 
-            LastUpdateText = $"ts={data.Timestamp}  {DateTime.Now:HH:mm:ss}";
+            LastUpdateText = DateTime.Now.ToString("HH:mm:ss.fff");
         });
     }
 
     /// <summary>
-    /// Called by MessageRouter when a STATE message arrives.
-    /// Delegates parsing to TelemetryParser.ParseState.
+    /// Appelé par MessageRouter quand un message STATE arrive.
     /// </summary>
     public void OnStateReceived(string rawJson)
     {

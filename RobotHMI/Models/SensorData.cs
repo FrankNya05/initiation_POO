@@ -1,87 +1,53 @@
 namespace RobotHMI.Models;
 
 // ---------------------------------------------------------------------------
-// Sub-models for V1 telemetry payload sections
+// SensorData — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// Each class is a plain POCO (no logic, no dependencies).
-// They mirror the JSON sections inside the TELEMETRY payload exactly.
-// ---------------------------------------------------------------------------
-
-/// <summary>
-/// Battery information from the TELEMETRY payload.
-/// JSON: { "voltage": 7.4, "percent": 85, "critical": false }
-/// </summary>
-public class BatteryData
-{
-    /// <summary>Battery voltage in volts (e.g. 7.4).</summary>
-    public float Voltage  { get; set; }
-
-    /// <summary>State of charge, 0–100.</summary>
-    public int   Percent  { get; set; }
-
-    /// <summary>True when the battery is critically low.</summary>
-    public bool  Critical { get; set; }
-}
-
-/// <summary>
-/// Line sensor readings from the TELEMETRY payload.
-/// JSON: { "frontLeft": bool, "frontRight": bool, "backLeft": bool, "back": bool }
-/// Note: the ESP32 V1 protocol uses "back" (single) for the rear sensor.
-/// </summary>
-public class LineSensorData
-{
-    public bool FrontLeft  { get; set; }
-    public bool FrontRight { get; set; }
-    public bool BackLeft   { get; set; }
-
-    /// <summary>"back" in the JSON — single rear sensor in V1 protocol.</summary>
-    public bool Back       { get; set; }
-}
-
-/// <summary>
-/// Lidar reading from the TELEMETRY payload.
-/// Replaces the previous IR section.
-/// JSON: { "dist": 0.42, "angle": 15.5, "valid": true }
-/// dist and angle are floats on the ESP32 side.
-/// </summary>
-public class LidarData
-{
-    /// <summary>Measured distance (float, as sent by ESP32).</summary>
-    public float Dist  { get; set; }
-
-    /// <summary>Angle of the detected target in degrees (float, as sent by ESP32).</summary>
-    public float Angle { get; set; }
-
-    /// <summary>True when the reading is valid (target in range).</summary>
-    public bool  Valid { get; set; }
-}
-
-// ---------------------------------------------------------------------------
-// SensorData — top-level telemetry snapshot
-// ---------------------------------------------------------------------------
-// Produced by TelemetryParser.ParseTelemetry().
-// Consumed by TelemetryPanelViewModel to update the UI.
+// Représente un snapshot de télémétrie reçu de l'ESP32.
+// Aligné sur le protocole MQTT V1 (MQTT_PROTOCOL_V1.md).
 //
-// V1 JSON payload structure:
-//   {
-//     "ts":      1234567,
-//     "battery": { "voltage": 7.4, "percent": 85, "critical": false },
-//     "line":    { "frontLeft": bool, "frontRight": bool, "backLeft": bool, "back": bool },
-//     "lidar":   { "dist": 0.42, "angle": 15.5, "valid": true }
-//   }
+// Changements V2 :
+//   - Supprimé : IrFront, IrLeft, IrRight (section "ir" n'existe plus en V1)
+//   - Supprimé : LineBackRight (le capteur physique s'appelle "back", pas "backRight")
+//   - Ajouté   : LineBack (MODIFIÉ V2)
+//   - Ajouté   : BatteryVoltage, BatteryPercent, BatteryCritical (MODIFIÉ V2)
+//   - Ajouté   : LidarDist, LidarAngle, LidarValid (MODIFIÉ V2)
+//   - Ajouté   : Timestamp (MODIFIÉ V2)
 // ---------------------------------------------------------------------------
 
 public class SensorData
 {
-    /// <summary>Timestamp from the ESP32 (milliseconds since boot).</summary>
-    public long Timestamp { get; set; }
+    // -----------------------------------------------------------------------
+    // Capteurs de ligne — 4 capteurs physiques
+    // -----------------------------------------------------------------------
+    // Vrai = ligne blanche détectée (bord du dohyo).
+    // Positions : FRONT_LEFT, FRONT_RIGHT, BACK_LEFT, BACK (pas BACK_RIGHT).
 
-    /// <summary>Battery state. Never null — defaults to safe values if absent.</summary>
-    public BatteryData Battery { get; set; } = new();
+    public bool LineFrontLeft  { get; set; }   // MODIFIÉ V2 — inchangé
+    public bool LineFrontRight { get; set; }   // MODIFIÉ V2 — inchangé
+    public bool LineBackLeft   { get; set; }   // MODIFIÉ V2 — inchangé
+    public bool LineBack       { get; set; }   // MODIFIÉ V2 — était LineBackRight
 
-    /// <summary>Line sensor states. Never null — defaults to all false if absent.</summary>
-    public LineSensorData Line { get; set; } = new();
+    // -----------------------------------------------------------------------
+    // Batterie
+    // -----------------------------------------------------------------------
 
-    /// <summary>Lidar reading. Never null — defaults to zero/invalid if absent.</summary>
-    public LidarData Lidar { get; set; } = new();
+    public float BatteryVoltage  { get; set; }  // MODIFIÉ V2 — en Volts (ex: 7.35)
+    public int   BatteryPercent  { get; set; }  // MODIFIÉ V2 — 0-100
+    public bool  BatteryCritical { get; set; }  // MODIFIÉ V2 — true si niveau critique
+
+    // -----------------------------------------------------------------------
+    // Lidar — YDLIDAR Tmini Plus
+    // -----------------------------------------------------------------------
+    // Publie l'objet le plus proche détecté (filtré EMA côté ESP32).
+
+    public float LidarDist  { get; set; }  // MODIFIÉ V2 — en mètres (ex: 0.42)
+    public float LidarAngle { get; set; }  // MODIFIÉ V2 — en degrés (ex: 45.0)
+    public bool  LidarValid { get; set; }  // MODIFIÉ V2 — true = cible valide détectée
+
+    // -----------------------------------------------------------------------
+    // Horodatage
+    // -----------------------------------------------------------------------
+
+    public long Timestamp { get; set; }  // MODIFIÉ V2 — ms depuis démarrage ESP32
 }

@@ -1,15 +1,11 @@
+// ============================================================
+// ControlPanelView.axaml.cs — code-behind minimal
+// ============================================================
+// Fichier séparé : RobotHMI/Views/Panels/ControlPanelView.axaml.cs
 using Avalonia.Controls;
-
 namespace RobotHMI.Views.Panels;
 
-/// <summary>
-/// Code-behind for ControlPanelView.
-/// Contains only InitializeComponent() — all logic lives in ControlPanelViewModel.
-/// </summary>
 public partial class ControlPanelView : UserControl
 {
-    public ControlPanelView()
-    {
-        InitializeComponent();
-    }
+    public ControlPanelView() => InitializeComponent();
 }
