@@ -127,8 +127,4 @@ public:
     }
 };
 
-<<<<<<< HEAD
-//WiFiComm* WiFiComm::_instance = nullptr;
-=======
 inline WiFiComm* WiFiComm::_instance = nullptr;
->>>>>>> origin/main
