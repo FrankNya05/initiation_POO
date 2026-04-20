@@ -24,6 +24,10 @@ namespace LidarProtocol {
 
     constexpr uint32_t TOUR_MS = 150;
     constexpr uint32_t STARTUP_DELAY_MS = 100;
+
+    // Zone morte — châssis du robot bloque le scan autour de 0°
+    constexpr float BLIND_CENTER_DEG =   0.0f;  // centre de la zone masquée
+    constexpr float BLIND_HALF_DEG   =  20.0f;  // ±20° autour de 0° ignorés (340°–20°)
 }
 
 class LidarSensor : public SensorsInterface {
@@ -371,15 +375,14 @@ private:
                 dist > LidarProtocol::MAX_DIST_M)
                 continue;
 
+            float angle = angleStart + i * angleStep;
+            if (angle >= 360.0f) angle -= 360.0f;
+
             _validPoints++;
 
             if (dist < _nearestDist) {
-
-                _nearestDist = dist;
-                _nearestAngle = angleStart + i * angleStep;
-
-                if (_nearestAngle >= 360)
-                    _nearestAngle -= 360;
+                _nearestDist  = dist;
+                _nearestAngle = angle;
             }
         }
 

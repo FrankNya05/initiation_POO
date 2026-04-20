@@ -1,257 +1,191 @@
-// ============================================
-//  main.cpp — Point d'entrée du robot mini-sumo
-//  Instancie tous les objets, initialise le
-//  matériel et lance les tâches FreeRTOS.
-// ============================================
 #include <Arduino.h>
-
-// ── Drivers ──────────────────────────────────
+#include <Wire.h>
+#include "RTOSConfig.hpp"
+#include "RobotContext.hpp"
+#include "DriverLedRGB.hpp"
 #include "DriverMotor.hpp"
 #include "DriverManager.hpp"
-#include "DriverLedRGB.hpp"
-
-// ── Capteurs ─────────────────────────────────
-#include "SensorManger.hpp"
-#include "LidarSensor.hpp"
-#include "LineSensor.hpp"
-#include "IRSensor.hpp"
-#include "IMUsensor.hpp"
-#include "BattSensor.hpp"
-#include "SensorSwitch.hpp"
-#include "Encoder.hpp"
-
-// ── Stratégies ───────────────────────────────
 #include "StrategyManager.hpp"
 #include "AdamantineStrategy.hpp"
 #include "BerserkerStrategy.hpp"
+#include "TrackStrategy.hpp"
 #include "CircleDohyoStrategy.hpp"
-
-// ── Communication ────────────────────────────
+#include "SensorManger.hpp"
+#include "IMUsensor.hpp"
+#include "IRSensor.hpp"
+#include "LineSensor.hpp"
+#include "BattSensor.hpp"
+#include "LidarSensor.hpp"
+#include "SensorSwitch.hpp"
 #include "CommunicationManager.hpp"
-
-// ── Outils ───────────────────────────────────
-#include "EKF.hpp"
-#include "PID.hpp"
-
-// ── RTOS ─────────────────────────────────────
-#include "RobotContext.hpp"
-#include "RTOSConfig.hpp"
-#include "Queues.hpp"
 #include "Tasks.hpp"
 
-// ═══════════════════════════════════════════════════════════════
-//  Mutex global Serial (requis par les macros LOG/LOGF)
-// ═══════════════════════════════════════════════════════════════
+// ── Identifiants réseau ───────────────────────────────────────
+static constexpr const char* WIFI_SSID       = "S25Ultra";
+static constexpr const char* WIFI_PASS       = "sylvain123";
+static constexpr const char* MQTT_BROKER_IP  = "10.200.134.169";
+static constexpr uint16_t    MQTT_PORT       = 1883;
+static constexpr const char* MQTT_TOPIC_PUB  = "robot/telemetry";
+static constexpr const char* MQTT_TOPIC_SUB  = "robot/cmd";
+
 SemaphoreHandle_t g_logMutex = nullptr;
 
-// ═══════════════════════════════════════════════════════════════
-//  Instances globales
-// ═══════════════════════════════════════════════════════════════
-
-// ── Moteurs ──────────────────────────────────
-DriverManager  driverManager;
-DriverLedRGB   led;
-
-// ── Capteurs ─────────────────────────────────
-SensorManager  sensorManager;
-Encoder        encoderLeft (RobotConfig::ENCODER_MOTOR_LEFT_P,  RobotConfig::ENCODER_MOTOR_LEFT_H);
-Encoder        encoderRight(RobotConfig::ENCODER_MOTOR_RIGHT_P, RobotConfig::ENCODER_MOTOR_RIGHT_H);
-
-// ── Stratégies ───────────────────────────────
-StrategyManager    strategyManager;
+// ── LED + Stratégies ──────────────────────────────────────────
+DriverLedRGB       led;
+StrategyManager    stratManager;
 AdamantineStrategy stratAdamantine;
 BerserkerStrategy  stratBerserker;
+TrackStrategy      stratTrack;
 CircleDohyoStrategy stratCircle;
+LedTaskParams      ledParams { &led, &stratManager };
 
-// ── Communication ────────────────────────────
-CommunicationManager commManager;
+// ── Capteurs ──────────────────────────────────────────────────
+SensorManager sensorManager;
 
-// ── Localisation ─────────────────────────────
-EKF ekf;
+// ── Moteurs ───────────────────────────────────────────────────
+DriverManager driverManager;
 
-// ── PID vitesse moteurs ───────────────────────
-PID pidLeft (1.2f, 0.05f, 0.02f);
-PID pidRight(1.2f, 0.05f, 0.02f);
+// ── Lidar (tâche dédiée) ──────────────────────────────────────
+LidarSensor lidar;
 
-// ═══════════════════════════════════════════════════════════════
-//  Callbacks pour taskCommand
-// ═══════════════════════════════════════════════════════════════
+// ── Communication MQTT ────────────────────────────────────────
+CommunicationManager comm;
 
-void onStrategy(const char* name) {
-    if      (strcmp(name, "ADAMANTINE") == 0) strategyManager.setStrategy(&stratAdamantine);
-    else if (strcmp(name, "BERSERKER")  == 0) strategyManager.setStrategy(&stratBerserker);
-    else if (strcmp(name, "CIRCLE")     == 0) strategyManager.setStrategy(&stratCircle);
-    else LOGF("[main] Stratégie inconnue : %s\n", name);
-}
+// ── Callbacks commandes HMI ───────────────────────────────────
+static void onStrategyCmd(const char* name)              { stratManager.setByName(name); }
+static void onLedCmd(uint8_t r, uint8_t g, uint8_t b)   { led.setColor(r, g, b); }
+static void onPoseResetCmd()                             { RobotContext::instance().setPose({0.0f, 0.0f, 0.0f}); }
 
-void onLed(uint8_t r, uint8_t g, uint8_t b) {
-    led.setColor(r, g, b);
-}
-
-// Valeurs PID courantes — modifiables individuellement depuis le HMI
-static float g_kp = 1.2f, g_ki = 0.05f, g_kd = 0.02f;
-
-void onPidKp(float v) {
-    g_kp = v;
-    pidLeft.setGains(g_kp, g_ki, g_kd);
-    pidRight.setGains(g_kp, g_ki, g_kd);
-}
-
-void onPidKi(float v) {
-    g_ki = v;
-    pidLeft.setGains(g_kp, g_ki, g_kd);
-    pidRight.setGains(g_kp, g_ki, g_kd);
-}
-
-void onPidKd(float v) {
-    g_kd = v;
-    pidLeft.setGains(g_kp, g_ki, g_kd);
-    pidRight.setGains(g_kp, g_ki, g_kd);
-}
-
-void onPoseReset() {
-    ekf.reset();
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  Paramètres de tâches (structs passées via pvParameters)
-// ═══════════════════════════════════════════════════════════════
-EKFParams         ekfParams = { &ekf, &encoderLeft, &encoderRight };
-CommandTaskParams cmdParams = {
-    &strategyManager,
-    onStrategy,
-    onLed,
-    onPidKp,
-    onPidKi,
-    onPidKd,
-    onPoseReset
+CommandTaskParams cmdParams {
+    &stratManager,
+    onStrategyCmd,
+    onLedCmd,
+    nullptr,        // PID KP — non utilisé
+    nullptr,        // PID KI — non utilisé
+    nullptr,        // PID KD — non utilisé
+    onPoseResetCmd
 };
 
-// ═══════════════════════════════════════════════════════════════
-//  setup()
-// ═══════════════════════════════════════════════════════════════
-void setup() {
-    Serial.begin(115200);
-
-    // ── Mutex Serial ──────────────────────────
-    g_logMutex = xSemaphoreCreateMutex();
-
-    LOG("[main] Démarrage robot mini-sumo");
-
-    // ── LED ───────────────────────────────────
-    led.init();
-    led.setColor(LedColor::YELLOW);  // initialisation en cours
-
-    // ── Moteurs ───────────────────────────────
-    driverManager.add(new DriverMotor(), DriverRole::MAIN);
-    if (!driverManager.initAll()) {
-        LOG("[main] ERREUR init moteurs");
-        led.setColor(LedColor::RED);
+// ── Tâche Lidar ───────────────────────────────────────────────
+void taskLidar(void* pv) {
+    lidar.init();
+    for (;;) {
+        lidar.update();
+        RobotContext::instance().setLidarData(lidar.getData());
+        vTaskDelay(pdMS_TO_TICKS(10));  // 100 Hz
     }
-
-    // ── Encodeurs ─────────────────────────────
-    encoderLeft.init(true);   // true  = gauche
-    encoderRight.init(false); // false = droite
-
-    // ── Capteurs ──────────────────────────────
-    sensorManager.add(new LidarSensor(),
-                      true);
-
-    sensorManager.add(new LineSensor(SensorPosition::FRONT_LEFT,  512),
-                      true);
-    sensorManager.add(new LineSensor(SensorPosition::FRONT_RIGHT, 512),
-                      true);
-    sensorManager.add(new LineSensor(SensorPosition::BACK,        512),
-                      true);
-
-    sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR,  SensorPosition::FRONT_LEFT),
-                      true);
-    sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR1, SensorPosition::FRONT_RIGHT),
-                      true);
-
-    sensorManager.add(new IMUSensor(SensorPosition::CENTER),
-                      true);
-
-    sensorManager.add(new BattSensor(SensorPosition::BATTERY),
-                      true);
-
-    sensorManager.add(new SensorSwitch(RobotConfig::START_BUTTON),
-                      true);
-
-    if (!sensorManager.initAll()) {
-        LOG("[main] ERREUR init capteurs");
-        led.setColor(LedColor::RED);
-    }
-
-    // ── EKF ───────────────────────────────────
-    ekf.reset();
-
-    // ── PID ───────────────────────────────────
-    pidLeft.setLimits(-255, 255);
-    pidRight.setLimits(-255, 255);
-
-    // ── Stratégie par défaut ──────────────────
-    strategyManager.setStrategy(&stratAdamantine);
-
-    // ── Communication ─────────────────────────
-    commManager.begin();
-    commManager.setAutoSelectEnabled(true);
-
-    // ── Queue commandes ───────────────────────
-    RobotQueues::init();
-
-    // ── Tâches FreeRTOS ───────────────────────
-    xTaskCreatePinnedToCore(
-        taskSensors, "Sensors",
-        RTOSConfig::STACK_SENSORS, &sensorManager,
-        RTOSConfig::PRIO_SENSORS,  nullptr,
-        RTOSConfig::CORE_SENSORS);
-
-    xTaskCreatePinnedToCore(
-        taskEncoders, "Encoders",
-        RTOSConfig::STACK_ENCODER, &ekfParams,
-        RTOSConfig::PRIO_ENCODER,  nullptr,
-        RTOSConfig::CORE_ENCODER);
-
-    xTaskCreatePinnedToCore(
-        taskStrategy, "Strategy",
-        RTOSConfig::STACK_STRATEGY, &strategyManager,
-        RTOSConfig::PRIO_STRATEGY,  nullptr,
-        RTOSConfig::CORE_STRATEGY);
-
-    xTaskCreatePinnedToCore(
-        taskMotors, "Motors",
-        RTOSConfig::STACK_MOTORS, &driverManager,
-        RTOSConfig::PRIO_MOTORS,  nullptr,
-        RTOSConfig::CORE_MOTORS);
-
-    xTaskCreatePinnedToCore(
-        taskComm, "Comm",
-        RTOSConfig::STACK_COMM, &commManager,
-        RTOSConfig::PRIO_COMM,  nullptr,
-        RTOSConfig::CORE_COMM);
-
-    xTaskCreatePinnedToCore(
-        taskCommand, "Command",
-        RTOSConfig::STACK_COMMAND, &cmdParams,
-        RTOSConfig::PRIO_COMMAND,  nullptr,
-        RTOSConfig::CORE_COMMAND);
-
-    // ── Prêt ──────────────────────────────────
-    led.setColor(LedColor::GREEN);
-    LOG("[main] Toutes les tâches lancées — robot prêt");
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  loop() — vide : tout est géré par les tâches FreeRTOS
-// ═══════════════════════════════════════════════════════════════
-void loop() {
-    // LED reflète l'état courant du robot
-    switch (RobotContext::instance().getState()) {
-        case RobotConstants::State::STANDBY: led.setColor(LedColor::YELLOW); break;
-        case RobotConstants::State::SEARCH:  led.setColor(LedColor::BLUE);   break;
-        case RobotConstants::State::ATTACK:  led.setColor(LedColor::RED);    break;
-        case RobotConstants::State::EVADE:   led.setColor(LedColor::ORANGE); break;
+void setup() {
+    Serial.begin(115200);
+    g_logMutex = xSemaphoreCreateMutex();
+
+    Wire.begin(21, 22);
+    Wire.setClock(400000);
+
+    // ── Capteurs ──────────────────────────────────────────────
+    sensorManager.add(new IMUSensor(SensorPosition::CENTER));
+    sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR,  SensorPosition::FRONT_LEFT));
+    sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR1, SensorPosition::FRONT_RIGHT));
+    sensorManager.add(new LineSensor(SensorPosition::FRONT_LEFT,  2000, false));
+    sensorManager.add(new LineSensor(SensorPosition::FRONT_RIGHT, 2000, false));
+    sensorManager.add(new LineSensor(SensorPosition::BACK,        2000, false));
+    sensorManager.add(new BattSensor(SensorPosition::BATTERY));
+    sensorManager.add(new SensorSwitch(RobotConfig::START_BUTTON));
+
+    driverManager.add(new DriverMotor());
+    bool motorOk = driverManager.initAll();
+    Serial.printf("[main] Moteurs init : %s\n", motorOk ? "OK" : "ERREUR");
+
+    bool sensorsOk = sensorManager.initAll();
+    Serial.printf("[main] Capteurs init : %s\n", sensorsOk ? "OK" : "ERREUR");
+
+    // ── Stratégies — ordre = ordre de cycle (double appui) ────
+    stratManager.registerStrategy(&stratTrack);       // 1er = défaut
+    stratManager.registerStrategy(&stratAdamantine);  // 2e
+    stratManager.registerStrategy(&stratBerserker);   // 3e
+    stratManager.registerStrategy(&stratCircle);      // 4e
+
+    // ── LED ───────────────────────────────────────────────────
+    led.init();
+    RobotContext::instance().setState(RobotConstants::State::STANDBY);
+
+    // ── Communication MQTT ────────────────────────────────────
+    comm.configureWifi(WIFI_SSID, WIFI_PASS, MQTT_BROKER_IP,
+                       MQTT_PORT, MQTT_TOPIC_PUB, MQTT_TOPIC_SUB);
+    comm.selectChannel(CommChannel::WIFI);
+
+    // ── Tâches FreeRTOS ───────────────────────────────────────
+    xTaskCreatePinnedToCore(taskLed,      "LED",
+        RTOSConfig::STACK_LED,     &ledParams,    RTOSConfig::PRIO_LED,     nullptr, RTOSConfig::CORE_LED);
+
+    xTaskCreatePinnedToCore(taskSensors,  "SENSORS",
+        RTOSConfig::STACK_SENSORS, &sensorManager, RTOSConfig::PRIO_SENSORS, nullptr, RTOSConfig::CORE_SENSORS);
+
+    xTaskCreatePinnedToCore(taskLidar,    "LIDAR",
+        4096, nullptr, 2, nullptr, 1);
+
+    xTaskCreatePinnedToCore(taskStrategy, "STRATEGY",
+        RTOSConfig::STACK_STRATEGY, &stratManager, RTOSConfig::PRIO_STRATEGY, nullptr, RTOSConfig::CORE_STRATEGY);
+
+    xTaskCreatePinnedToCore(taskMotors,   "MOTORS",
+        RTOSConfig::STACK_MOTORS, &driverManager, RTOSConfig::PRIO_MOTORS, nullptr, RTOSConfig::CORE_MOTORS);
+
+    xTaskCreatePinnedToCore(taskComm,     "COMM",
+        RTOSConfig::STACK_COMM,  &comm,          RTOSConfig::PRIO_COMM,    nullptr, RTOSConfig::CORE_COMM);
+
+    xTaskCreatePinnedToCore(taskCommand,  "CMD",
+        RTOSConfig::STACK_COMMAND, &cmdParams,   RTOSConfig::PRIO_COMMAND, nullptr, RTOSConfig::CORE_COMMAND);
+
+    Serial.println("[main] Toutes les taches demarrees");
+}
+
+static const char* stateStr(RobotConstants::State s) {
+    switch (s) {
+        case RobotConstants::State::STANDBY: return "STANDBY";
+        case RobotConstants::State::SEARCH:  return "SEARCH";
+        case RobotConstants::State::ATTACK:  return "ATTACK";
+        case RobotConstants::State::EVADE:   return "EVADE";
+        default: return "?";
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
+}
+
+void loop() {
+    auto& ctx = RobotContext::instance();
+    SensorData imu   = ctx.getIMUData();
+    SensorData tofFL = ctx.getTOFData(SensorPosition::FRONT_LEFT);
+    SensorData tofFR = ctx.getTOFData(SensorPosition::FRONT_RIGHT);
+    SensorData lidarD = ctx.getLidarData();
+    SensorData batt  = ctx.getBattData();
+    auto cmd = ctx.getMotorSpeeds();
+
+    SensorData lineFL = ctx.getLineData(SensorPosition::FRONT_LEFT);
+    SensorData lineFR = ctx.getLineData(SensorPosition::FRONT_RIGHT);
+    SensorData lineB  = ctx.getLineData(SensorPosition::BACK);
+
+    int rawFL = analogRead(RobotConfig::LINE_SENSOR_FRONT_LEFT);
+    int rawFR = analogRead(RobotConfig::LINE_SENSOR_FRONT_RIGHT);
+    int rawB  = analogRead(RobotConfig::LINE_SENSOR_BACK);
+
+    Serial.println("---");
+    Serial.printf("STATE  %-8s  STRAT %-12s  MOT L=%4d  R=%4d\n",
+        stateStr(ctx.getState()), stratManager.currentName(),
+        cmd.leftSpeed, cmd.rightSpeed);
+    Serial.printf("LINE   FL=%s(%4d)  FR=%s(%4d)  B=%s(%4d)   seuil=2000\n",
+        (lineFL.isValid && lineFL.value.scalar > 0) ? "BORD" : "ok  ", rawFL,
+        (lineFR.isValid && lineFR.value.scalar > 0) ? "BORD" : "ok  ", rawFR,
+        (lineB.isValid  && lineB.value.scalar  > 0) ? "BORD" : "ok  ", rawB);
+    Serial.printf("IMU    gx=%5.1f  gy=%5.1f  gz=%5.1f  [%s]\n",
+        imu.value.imu.gx, imu.value.imu.gy, imu.value.imu.gz,
+        imu.isValid ? "OK" : "ERR");
+    Serial.printf("TOF-FL %5.0f mm  TOF-FR %5.0f mm\n",
+        tofFL.value.scalar, tofFR.value.scalar);
+    Serial.printf("LIDAR  %.2f m  %.1f deg  [%s]\n",
+        lidarD.value.vector.x, lidarD.value.vector.y,
+        lidarD.isValid ? "OK" : "ERR");
+    Serial.printf("BATT   %.2f V  [%s]\n",
+        batt.value.scalar, batt.isValid ? "OK" : "ERR");
+    Serial.printf("MQTT   %s\n", comm.isConnected() ? "connecte" : "deconnecte");
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
 }

@@ -44,6 +44,10 @@ namespace BattConfig {
 
     // Filtrage ADC : nombre de lectures moyennées
     constexpr uint8_t FILTER_SAMPLES = 10;
+
+    // Correction non-linéarité ADC ESP32 (ADC_11db sous-estime)
+    // Calculé : multimètre(8.09V) / ADC(7.718V) = 1.0482
+    constexpr float CALIBRATION_FACTOR = 1.0482f;
 }
 using namespace BattConfig;
 // ─────────────────────────────────────────────
@@ -136,7 +140,7 @@ private:
     float _readRaw() const {
         int raw = analogRead(_pin);
         float vout = (static_cast<float>(raw) / BattConfig::ADC_MAX) * BattConfig::ADC_REF;
-        return vout * BattConfig::DIVIDER_RATIO;
+        return vout * BattConfig::DIVIDER_RATIO * BattConfig::CALIBRATION_FACTOR;
     }
 
     // ── Filtrage par moyenne glissante ────────────

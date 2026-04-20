@@ -2,6 +2,7 @@
 #include "RobotContext.hpp"
 #include "RobotConstants.hpp"
 #include "DriverManager.hpp"
+#include "DriverLedRGB.hpp"
 #include "SensorManger.hpp"
 #include "StrategyManager.hpp"
 #include "CommunicationManager.hpp"
@@ -18,6 +19,48 @@ struct EKFParams {
     Encoder* left;
     Encoder* right;
 };
+
+// ───────────────────────────────────────────────────────────────
+//  Paramètres de taskLed
+// ───────────────────────────────────────────────────────────────
+struct LedTaskParams {
+    DriverLedRGB*    led;
+    StrategyManager* manager;
+};
+
+// ───────────────────────────────────────────────────────────────
+//  ledStartup — séquence visuelle de démarrage (5 s)
+//  Rouge → Vert → Bleu, ~1667 ms chacun.
+//  À appeler au début de chaque tâche, avant son for(;;).
+// ───────────────────────────────────────────────────────────────
+static inline void ledStartup(DriverLedRGB* led) {
+    constexpr TickType_t STEP = pdMS_TO_TICKS(5000 / 3);
+    led->setColor(LedColor::RED);   vTaskDelay(STEP);
+    led->setColor(LedColor::GREEN); vTaskDelay(STEP);
+    led->setColor(LedColor::BLUE);  vTaskDelay(STEP);
+    led->off();
+}
+
+// ───────────────────────────────────────────────────────────────
+//  taskLed — 10 Hz, Core 0, Prio 0
+//  STANDBY → YELLOW
+//  Actif   → couleur de la stratégie courante
+// ───────────────────────────────────────────────────────────────
+void taskLed(void* pvParameters)
+{
+    LedTaskParams* p = static_cast<LedTaskParams*>(pvParameters);
+    ledStartup(p->led);
+
+    for (;;)
+    {
+        if (RobotContext::instance().getState() == RobotConstants::State::STANDBY) {
+            p->led->setColor(LedColor::YELLOW);
+        } else {
+            p->led->setColor(p->manager->currentColor());
+        }
+        vTaskDelay(RTOSConfig::PERIOD_LED);
+    }
+}
 
 // ───────────────────────────────────────────────────────────────
 //  taskMotors — 100 Hz, Core 1, Prio 4
@@ -131,10 +174,20 @@ void taskStrategy(void* pvParameters)
             // Double appui rapide → cycle de stratégie
             if (press == PressType::RAPID &&
                 state != RobotConstants::State::STANDBY) {
-                const char* next = manager->currentName();
-                LOGF("[Strategy] Stratégie suivante : %s\n", next);
-                // Le cycle est géré via HMI — ici juste un log
+                manager->nextStrategy();
+                LOGF("[Strategy] Stratégie : %s\n", manager->currentName());
             }
+        }
+
+        // ── Protection batterie ───────────────────────────────
+        SensorData batt = ctx.getBattData();
+        if (batt.isValid && batt.value.scalar <= 6.20f &&
+            state != RobotConstants::State::STANDBY) {
+            LOG("[Strategy] BATTERIE CRITIQUE → STANDBY force");
+            ctx.setState(RobotConstants::State::STANDBY);
+            ctx.setMotorSpeeds({});
+            vTaskDelay(RTOSConfig::PERIOD_STRATEGY);
+            continue;
         }
 
         // ── Exécution stratégie (seulement hors STANDBY) ─────
@@ -155,10 +208,11 @@ void taskComm(void* pvParameters)
 {
     CommunicationManager* comm = static_cast<CommunicationManager*>(pvParameters);
 
-    // Enregistrer le callback une seule fois avant la boucle
     comm->onReceive([](const std::string& msg) {
         RobotQueues::sendCommand(msg.c_str());
     });
+
+    comm->begin();  // connexion WiFi + MQTT (bloquant jusqu'à connexion)
 
     for (;;)
     {
@@ -191,9 +245,12 @@ void taskComm(void* pvParameters)
 
             // IMU
             SensorData imu = ctx.getIMUData();
-            float gz = imu.isValid ? imu.value.imu.gz : 0.0f;
             float ax = imu.isValid ? imu.value.imu.ax : 0.0f;
             float ay = imu.isValid ? imu.value.imu.ay : 0.0f;
+            float az = imu.isValid ? imu.value.imu.az : 0.0f;
+            float gx = imu.isValid ? imu.value.imu.gx : 0.0f;
+            float gy = imu.isValid ? imu.value.imu.gy : 0.0f;
+            float gz = imu.isValid ? imu.value.imu.gz : 0.0f;
 
             // Encodeurs
             RobotContext::EncoderData encL = ctx.getEncoderData(SensorPosition::LEFT);
@@ -205,29 +262,84 @@ void taskComm(void* pvParameters)
             // Incertitude EKF
             // (stockée dans EKF directement — accès via pose uniquement ici)
 
+            // ── Calculs complémentaires pour le protocole V1 ──────────
+            // Batterie : percent et critical calculés localement
+            // (BattSensor::getPercent/isCritical ne sont pas dans RobotContext)
+            float  batVoltage  = batt.isValid ? batt.value.scalar : 0.0f;
+            int    batPercent  = batt.isValid
+                                 ? (int)((batVoltage - 6.0f) / (8.4f - 6.0f) * 100.0f)
+                                 : 0;
+            // Clamping 0-100
+            if (batPercent < 0)   batPercent = 0;
+            if (batPercent > 100) batPercent = 100;
+            bool batCritical = batt.isValid && (batVoltage <= 6.60f);
+ 
+            // Lidar : validité explicite (le HMI attend un bool "valid")
+            bool lidarValid = lidar.isValid && (lidar.value.vector.x > 0.0f);
+            float lidarDist  = lidarValid ? lidar.value.vector.x : 0.0f;
+            float lidarAngle = lidarValid ? lidar.value.vector.y : 0.0f;
+ 
+            // Capteurs de ligne : conversion int (0/1/-1) → bool
+            // lineVal() existe déjà dans la tâche, on l'utilise directement
+            bool lineFLbool = (lineVal(lineFL) == 1);
+            bool lineFRbool = (lineVal(lineFR) == 1);
+            bool lineBbool  = (lineVal(lineB)  == 1);
+            // Note : BACK_LEFT n'est pas dans _posToIndex du RobotContext
+            // → on envoie false pour backLeft (hardware non câblé séparément)
+ 
+            // ── Sérialisation au format protocole V1 ──────────────────
+            // Enveloppe {"type":"TELEMETRY","payload":{...}} attendue par le HMI.
+            // Buffer agrandi à 384 pour contenir l'enveloppe complète.
             char buf[512];
             snprintf(buf, sizeof(buf),
                 "{"
-                "\"x\":%.1f,\"y\":%.1f,\"th\":%.3f,"
-                "\"bat\":%.2f,\"state\":%d,"
-                "\"enemy_dist\":%.3f,\"enemy_angle\":%.1f,"
-                "\"line_fl\":%d,\"line_fr\":%d,\"line_b\":%d,"
-                "\"tof_fl\":%.1f,\"tof_fr\":%.1f,"
-                "\"gz\":%.3f,\"ax\":%.3f,\"ay\":%.3f,"
-                "\"rpm_l\":%.1f,\"rpm_r\":%.1f,"
-                "\"cnt_l\":%ld,\"cnt_r\":%ld,"
-                "\"mot_l\":%d,\"mot_r\":%d"
+                    "\"type\":\"TELEMETRY\","
+                    "\"payload\":{"
+                        "\"ts\":%lu,"
+                        "\"battery\":{"
+                            "\"voltage\":%.2f,"
+                            "\"percent\":%d,"
+                            "\"critical\":%s"
+                        "},"
+                        "\"line\":{"
+                            "\"frontLeft\":%s,"
+                            "\"frontRight\":%s,"
+                            "\"backLeft\":false,"
+                            "\"back\":%s"
+                        "},"
+                        "\"lidar\":{"
+                            "\"dist\":%.3f,"
+                            "\"angle\":%.1f,"
+                            "\"valid\":%s"
+                        "},"
+                        "\"imu\":{"
+                            "\"ax\":%.3f,"
+                            "\"ay\":%.3f,"
+                            "\"az\":%.3f,"
+                            "\"gx\":%.3f,"
+                            "\"gy\":%.3f,"
+                            "\"gz\":%.3f,"
+                            "\"valid\":%s"
+                        "},"
+                        "\"motors\":{"
+                            "\"left\":%d,"
+                            "\"right\":%d"
+                        "}"
+                    "}"
                 "}",
-                pose.x, pose.y, pose.theta,
-                batt.isValid  ? batt.value.scalar  : 0.0f,
-                (int)ctx.getState(),
-                enemyDist, enemyAngle,
-                lineVal(lineFL), lineVal(lineFR), lineVal(lineB),
-                tofFL.isValid ? tofFL.value.scalar : -1.0f,
-                tofFR.isValid ? tofFR.value.scalar : -1.0f,
-                gz, ax, ay,
-                encL.rpm, encR.rpm,
-                encL.totalCount, encR.totalCount,
+                (unsigned long)millis(),
+                batVoltage,
+                batPercent,
+                batCritical  ? "true" : "false",
+                lineFLbool   ? "true" : "false",
+                lineFRbool   ? "true" : "false",
+                lineBbool    ? "true" : "false",
+                lidarDist,
+                lidarAngle,
+                lidarValid   ? "true" : "false",
+                ax, ay, az,
+                gx, gy, gz,
+                imu.isValid  ? "true" : "false",
                 cmd.leftSpeed, cmd.rightSpeed
             );
             comm->send(std::string(buf));
@@ -282,7 +394,7 @@ void taskEncoders(void* pvParameters)
             uint32_t now = millis();
             float dtSec  = (now - lastMs) / 1000.0f;
             lastMs       = now;
-            p->ekf->updateIMU(imuData.value.imu.gz, dtSec);
+            p->ekf->updateIMU(imuData.value.imu.gx * DEG_TO_RAD, dtSec);
         }
 
         // 5. Publier la pose estimée

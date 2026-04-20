@@ -31,11 +31,19 @@
 class BerserkerStrategy : public StrategyInterface {
 public:
 
-    const char* name() const override { return "Berserker"; }
+    const char* name()  const override { return "Berserker"; }
+    LedColor    color() const override { return LedColor::MAGENTA; }
 
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
 
         using AC = RobotConstants::ActionCommand;
+
+        // ── 0. EVADE verrouillé — durée minimale garantie ─────
+        uint32_t now = millis();
+        if (now < _evadeUntil) {
+            ctx.setState(RobotConstants::State::EVADE);
+            return _evadeCmd;
+        }
 
         // ── 1. Bords — récupération ultra-rapide ──────────────
         SensorData lineFL = ctx.getLineData(SensorPosition::FRONT_LEFT);
@@ -46,25 +54,14 @@ public:
         bool fr = lineFR.isValid && lineFR.value.scalar > 0.0f;
         bool b  = lineB.isValid  && lineB.value.scalar  > 0.0f;
 
-        if (b) {
-            // Bord arrière → charger pleine puissance
+        if (b || fl || fr) {
+            _evadeUntil = now + EVADE_MIN_MS;
+            if (b)             { _evadeCmd = AC{  SPEED_MAX,   SPEED_MAX   }; }
+            else if (fl && fr) { _evadeCmd = AC{ -SPEED_EVADE, -SPEED_EVADE }; }
+            else if (fl)       { _evadeCmd = AC{  SPEED_MAX,   -SPEED_EVADE }; }
+            else               { _evadeCmd = AC{ -SPEED_EVADE,  SPEED_MAX   }; }
             ctx.setState(RobotConstants::State::EVADE);
-            return AC{ SPEED_MAX, SPEED_MAX };
-        }
-        if (fl && fr) {
-            // Les deux capteurs avant → reculer court et pivoter vite
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_EVADE, -SPEED_EVADE };
-        }
-        if (fl) {
-            // Bord avant-gauche → reculer et pivoter droite agressivement
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ SPEED_MAX, -SPEED_EVADE };
-        }
-        if (fr) {
-            // Bord avant-droit → reculer et pivoter gauche agressivement
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_EVADE, SPEED_MAX };
+            return _evadeCmd;
         }
 
         // ── 2. Impact IMU — choc détecté → maintenir la pression
@@ -98,26 +95,25 @@ public:
         if (lidar.isValid && lidar.value.vector.x < LIDAR_DETECT_M) {
             ctx.setState(RobotConstants::State::ATTACK);
 
-            float angle = lidar.value.vector.y;
+            // Lidar 0° = arrière robot, 180° = avant robot
+            float diff = lidar.value.vector.y - 180.0f;
+            if (diff >  180.0f) diff -= 360.0f;
+            if (diff < -180.0f) diff += 360.0f;
 
-            // Ennemi devant → charge directe
-            if (angle <= FRONT_ANGLE || angle >= (360.0f - FRONT_ANGLE)) {
+            // Ennemi aligné devant → charge directe
+            if (fabsf(diff) <= FRONT_ANGLE) {
                 return AC{ SPEED_MAX, SPEED_MAX };
             }
-            // Ennemi légèrement à droite → correction légère
-            if (angle < SIDE_ANGLE) {
+            // Correction légère droite/gauche
+            if (diff > 0.0f && diff <= SIDE_ANGLE) {
                 return AC{ SPEED_MAX, SPEED_TURN };
             }
-            // Ennemi légèrement à gauche → correction légère
-            if (angle > (360.0f - SIDE_ANGLE)) {
+            if (diff < 0.0f && diff >= -SIDE_ANGLE) {
                 return AC{ SPEED_TURN, SPEED_MAX };
             }
-            // Ennemi très à droite → pivot agressif sur place
-            if (angle < 180.0f) {
-                return AC{ SPEED_MAX, -SPEED_PIVOT };
-            }
-            // Ennemi très à gauche → pivot agressif sur place
-            return AC{ -SPEED_PIVOT, SPEED_MAX };
+            // Ennemi très à droite/gauche → pivot agressif
+            if (diff > 0.0f) return AC{  SPEED_MAX, -SPEED_PIVOT };
+            return              AC{ -SPEED_PIVOT,  SPEED_MAX };
         }
 
         // ── 5. Rien détecté → rotation rapide pour chercher ───
@@ -126,6 +122,11 @@ public:
     }
 
 private:
+    // ── EVADE verrouillé ─────────────────────────────────────
+    uint32_t                       _evadeUntil = 0;
+    RobotConstants::ActionCommand  _evadeCmd   = {0, 0};
+    static constexpr uint32_t      EVADE_MIN_MS = 250;  // Berserker : récupération plus courte
+
     // ── Seuils ────────────────────────────────────────────────
     static constexpr float TOF_CLOSE_MM   = 200.0f;  // TOF : charge immédiate (mm)
     static constexpr float LIDAR_DETECT_M =   1.20f; // Lidar : seuil de détection (m)

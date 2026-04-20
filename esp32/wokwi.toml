@@ -1,4 +1,0 @@
-[wokwi]
-version = 1
-firmware = 'build/diagram.json'
-elf = 'build/example_app.elf'

@@ -21,11 +21,19 @@
 class CircleDohyoStrategy : public StrategyInterface {
 public:
 
-    const char* name() const override { return "Circle"; }
+    const char* name()  const override { return "Circle"; }
+    LedColor    color() const override { return LedColor::WHITE; }
 
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
 
         using AC = RobotConstants::ActionCommand;
+
+        // ── EVADE verrouillé — durée minimale garantie ────────
+        uint32_t now = millis();
+        if (now < _evadeUntil) {
+            ctx.setState(RobotConstants::State::EVADE);
+            return _evadeCmd;
+        }
 
         SensorData lineFL = ctx.getLineData(SensorPosition::FRONT_LEFT);
         SensorData lineFR = ctx.getLineData(SensorPosition::FRONT_RIGHT);
@@ -37,15 +45,18 @@ public:
 
         // ── Bord arrière → avancer fort pour rentrer dans le ring ─
         if (b) {
+            _evadeUntil = now + EVADE_MIN_MS;
+            _evadeCmd   = AC{ SPEED_NORMAL, SPEED_NORMAL };
             ctx.setState(RobotConstants::State::EVADE);
-            return AC{ SPEED_NORMAL, SPEED_NORMAL };
+            return _evadeCmd;
         }
 
         // ── Les deux capteurs avant voient la ligne ────────────────
-        // Robot trop vers l'extérieur → reculer et pivoter vers l'intérieur
         if (fl && fr) {
+            _evadeUntil = now + EVADE_MIN_MS;
+            _evadeCmd   = AC{ -SPEED_SLOW, -SPEED_SLOW };
             ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_SLOW, -SPEED_SLOW };
+            return _evadeCmd;
         }
 
         // ── Capteur avant-gauche seul → trop à gauche ─────────────
@@ -69,6 +80,11 @@ public:
     }
 
 private:
+    // ── EVADE verrouillé ─────────────────────────────────────
+    uint32_t                       _evadeUntil = 0;
+    RobotConstants::ActionCommand  _evadeCmd   = {0, 0};
+    static constexpr uint32_t      EVADE_MIN_MS = 300;
+
     // ── Vitesses configurables ─────────────────────────────────
     static constexpr int SPEED_NORMAL = 180;  // vitesse de croisière
     static constexpr int SPEED_SLOW   =  80;  // vitesse de correction

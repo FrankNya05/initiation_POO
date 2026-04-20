@@ -7,11 +7,10 @@
 #endif
 
 // ═══════════════════════════════════════════════════════════════
-//  SensorSwitch — Détection de 3 types d'appui sur un bouton
+//  SensorSwitch — Détection de 2 types d'appui sur un bouton
 //
-//  COURT  : relâché avant LONG_PRESS_MS, sans 2e appui dans DOUBLE_MS
-//  LONG   : maintenu >= LONG_PRESS_MS
-//  RAPID  : 2 appuis courts dans DOUBLE_MS (double-clic)
+//  SHORT  : relâché avant LONG_PRESS_MS  → déclenche à la release
+//  LONG   : maintenu >= LONG_PRESS_MS    → déclenche à la release
 //
 //  Machine à états :
 //
@@ -20,12 +19,7 @@
 //                    (release, dur < LONG)
 //                         │
 //                         ▼
-//                    WAIT_DOUBLE ──(press)──► IDLE [emit RAPID]
-//                         │
-//                    (timeout DOUBLE_MS)
-//                         │
-//                         ▼
-//                      IDLE [emit SHORT]
+//                      IDLE [emit SHORT]   ← immédiat, sans délai
 // ═══════════════════════════════════════════════════════════════
 
 class SensorSwitch : public SensorsInterface
@@ -34,7 +28,6 @@ public:
     // ── Seuils temporels (ms) ────────────────────────────────
     static constexpr uint32_t DEBOUNCE_MS    =  50;
     static constexpr uint32_t LONG_PRESS_MS  = 800;
-    static constexpr uint32_t DOUBLE_MS      = 350;
 
     explicit SensorSwitch(uint8_t pin = RobotConfig::START_BUTTON,
                           bool    activeLow = true)
@@ -81,30 +74,12 @@ public:
 
             case State::PRESSED:
                 if (!stable) {
-                    // Bouton relâché
                     uint32_t held = now - _pressStart;
                     if (held >= LONG_PRESS_MS) {
                         _emit(PressType::LONG);
-                        _state = State::IDLE;
                     } else {
-                        // Appui court — attendre éventuel 2e clic
-                        _releaseTime = now;
-                        _state       = State::WAIT_DOUBLE;
-                        _emit(PressType::NONE);
+                        _emit(PressType::SHORT);  // immédiat, sans attente
                     }
-                } else {
-                    _emit(PressType::NONE);
-                }
-                break;
-
-            case State::WAIT_DOUBLE:
-                if (stable) {
-                    // 2e appui détecté dans la fenêtre → RAPID
-                    _emit(PressType::RAPID);
-                    _state = State::IDLE;
-                } else if ((now - _releaseTime) >= DOUBLE_MS) {
-                    // Fenêtre expirée → SHORT confirmé
-                    _emit(PressType::SHORT);
                     _state = State::IDLE;
                 } else {
                     _emit(PressType::NONE);
@@ -128,7 +103,7 @@ public:
     bool hasEvent() const { return _lastData.isValid; }
 
 private:
-    enum class State : uint8_t { IDLE, PRESSED, WAIT_DOUBLE };
+    enum class State : uint8_t { IDLE, PRESSED };
 
     uint8_t  _pin;
     bool     _activeLow;
@@ -137,7 +112,6 @@ private:
     bool     _lastRaw      = false;
     uint32_t _debounceStart = 0;
     uint32_t _pressStart    = 0;
-    uint32_t _releaseTime   = 0;
 
     SensorData _lastData;
 

@@ -6,14 +6,14 @@ namespace RobotConfig {
     // GPIO numériques standards pour les ponts en H
     constexpr uint8_t MOTOR_LEFT_PWM = 25; // IN4
     constexpr uint8_t MOTOR_LEFT_DIR = 26; // IN3
-    constexpr uint8_t MOTOR_RIGHT_PWM = 27; // IN2
+    constexpr uint8_t MOTOR_RIGHT_PWM = 13; // IN2
     constexpr uint8_t MOTOR_RIGHT_DIR = 14; // IN1
     
     // --- Capteurs de ligne (Digitaux ou Analogiques sur ADC1) ---
-    constexpr uint8_t LINE_SENSOR_FRONT_LEFT = 32;
-    constexpr uint8_t LINE_SENSOR_FRONT_RIGHT = 33;
-    constexpr uint8_t LINE_SENSOR_BACK_LEFT = 34;
-    constexpr uint8_t LINE_SENSOR_BACK = 35;
+    constexpr uint8_t LINE_SENSOR_FRONT_LEFT = 34;
+    constexpr uint8_t LINE_SENSOR_FRONT_RIGHT = 35;
+   // constexpr uint8_t LINE_SENSOR_BACK_LEFT = 32;
+    constexpr uint8_t LINE_SENSOR_BACK = 32;
     
     // --- Bouton de démarrage ---
     constexpr uint8_t START_BUTTON = 15;
@@ -58,8 +58,8 @@ namespace RobotConfig {
     constexpr uint8_t UTL_DRV8833 = 23;
 
     // --- LED RGB (PWM via ledc canaux 4-6) ---
-    constexpr uint8_t LED_PIN_R = 13;
-    constexpr uint8_t LED_PIN_G = 12;
+    constexpr uint8_t LED_PIN_R = 33;
+    constexpr uint8_t LED_PIN_G = 27;
     constexpr uint8_t LED_PIN_B = 2;
 
     // Canaux ledc dédiés LED (0-3 réservés aux moteurs)

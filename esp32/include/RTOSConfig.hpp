@@ -10,7 +10,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 // ─── Debug (commenter pour désactiver tout log) ────────────────
-//#define DEBUG_ENABLED
+#define DEBUG_ENABLED
 
 // ───────────────────────────────────────────────────────────────
 //  Constantes des tâches
@@ -22,10 +22,11 @@ namespace RTOSConfig {
     constexpr uint32_t STACK_SENSORS   = 6144;  // Lidar parser + TOF + ligne
     constexpr uint32_t STACK_STRATEGY  = 4096;  // Logique sumo
     constexpr uint32_t STACK_MOTORS    = 3072;  // PWM + queue commandes
-    constexpr uint32_t STACK_COMM      = 8192;  // WiFi + MQTT (gros stack requis)
+    constexpr uint32_t STACK_COMM      = 20480; // WiFi + MQTT (gros stack requis)
     constexpr uint32_t STACK_LOGGER    = 2048;  // Serial.print centralisé
     constexpr uint32_t STACK_ENCODER   = 2048;  // Lecture compteurs interruption
     constexpr uint32_t STACK_COMMAND   = 3072;  // Parsing commandes + séquences
+    constexpr uint32_t STACK_LED       = 1024;  // LED RGB — état robot
 
     // ── Priorités (0=plus basse, 24=plus haute sur ESP32) ───────
     // Règle : plus le timing est critique, plus la priorité est haute
@@ -36,6 +37,7 @@ namespace RTOSConfig {
     constexpr UBaseType_t PRIO_COMMAND   = 2;   // Normale  — commandes HMI
     constexpr UBaseType_t PRIO_COMM      = 1;   // Basse    — WiFi/MQTT
     constexpr UBaseType_t PRIO_LOGGER    = 1;   // Basse    — Serial debug
+    constexpr UBaseType_t PRIO_LED       = 0;   // Minimale — affichage état
 
     // ── Affectation des cœurs ───────────────────────────────────
     // Core 0 → WiFi/BT réservé par ESP-IDF (ne pas y mettre logique temps-réel)
@@ -47,6 +49,7 @@ namespace RTOSConfig {
     constexpr BaseType_t CORE_LOGGER    = 0;
     constexpr BaseType_t CORE_ENCODER   = 1;    // temps-réel → Core 1
     constexpr BaseType_t CORE_COMMAND   = 1;    // traitement commandes → Core 1
+    constexpr BaseType_t CORE_LED       = 0;    // non temps-réel → Core 0
 
     // ── Périodes de mise à jour (ms → ticks) ────────────────────
     constexpr TickType_t PERIOD_SENSORS   = pdMS_TO_TICKS(20);   // 50 Hz
@@ -54,6 +57,7 @@ namespace RTOSConfig {
     constexpr TickType_t PERIOD_MOTORS    = pdMS_TO_TICKS(10);   // 100 Hz
     constexpr TickType_t PERIOD_COMM      = pdMS_TO_TICKS(100);  // 10 Hz
     constexpr TickType_t PERIOD_ENCODER   = pdMS_TO_TICKS(5);    // 200 Hz
+    constexpr TickType_t PERIOD_LED       = pdMS_TO_TICKS(100); // 10 Hz
 
     // ── Logger queue ─────────────────────────────────────────────
     constexpr uint8_t  LOG_QUEUE_SIZE   = 16;   // nb messages en attente max

@@ -1,162 +1,266 @@
+// ============================================
+//  main.cpp — Point d'entrée du robot mini-sumo
+//  Instancie tous les objets, initialise le
+//  matériel et lance les tâches FreeRTOS.
+// ============================================
 #include <Arduino.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/semphr.h>
 
-#include "RTOSConfig.hpp"
+// ── Drivers ──────────────────────────────────
+#include "DriverMotor.hpp"
+#include "DriverManager.hpp"
+#include "DriverLedRGB.hpp"
+
+// ── Capteurs ─────────────────────────────────
 #include "SensorManger.hpp"
+#include "LidarSensor.hpp"
+#include "LineSensor.hpp"
+#include "IRSensor.hpp"
+#include "IMUsensor.hpp"
 #include "BattSensor.hpp"
+#include "SensorSwitch.hpp"
+#include "Encoder.hpp"
+
+// ── Stratégies ───────────────────────────────
+#include "StrategyManager.hpp"
+#include "AdamantineStrategy.hpp"
+#include "BerserkerStrategy.hpp"
+#include "CircleDohyoStrategy.hpp"
+
+// ── Communication ────────────────────────────
+#include "CommunicationManager.hpp"
+
+// ── Outils ───────────────────────────────────
+#include "EKF.hpp"
+#include "PID.hpp"
+
+// ── RTOS ─────────────────────────────────────
+#include "RobotContext.hpp"
+#include "RTOSConfig.hpp"
+#include "Queues.hpp"
+#include "Tasks.hpp"
 
 // ═══════════════════════════════════════════════════════════════
-//  LEÇON FREERTOS — Code minimal
-//
-//  Concept appris ici :
-//  1. Créer une tâche avec xTaskCreatePinnedToCore
-//  2. Boucle périodique avec vTaskDelayUntil
-//  3. Partager des données entre tâches avec un mutex
-//  4. LOG thread-safe
-//
-//  2 tâches seulement :
-//  ┌─────────────────┐     ┌─────────────────┐
-//  │  taskSensors    │     │  taskBlink      │
-//  │  Core 1 / P2    │     │  Core 1 / P1    │
-//  │  toutes 500 ms  │     │  toutes 1000 ms │
-//  │  lit batterie   │     │  clignote LED   │
-//  │  LOG résultat   │     │  prouve que les │
-//  └─────────────────┘     │  tâches tournent│
-//                          │  en parallèle   │
-//                          └─────────────────┘
+//  Mutex global Serial (requis par les macros LOG/LOGF)
 // ═══════════════════════════════════════════════════════════════
-
-// ── Mutex Serial — DOIT être créé avant tout LOG() ────────────
 SemaphoreHandle_t g_logMutex = nullptr;
 
-// ── SensorManager — partagé entre tâches ──────────────────────
-SensorManager sensorManager;
+// ═══════════════════════════════════════════════════════════════
+//  Instances globales
+// ═══════════════════════════════════════════════════════════════
 
-// ── LED embarquée ESP32 ───────────────────────────────────────
-static constexpr uint8_t LED_PIN = 2;
+// ── Moteurs ──────────────────────────────────
+DriverManager  driverManager;
+DriverLedRGB   led;
+
+// ── Capteurs ─────────────────────────────────
+SensorManager  sensorManager;
+Encoder        encoderLeft (RobotConfig::ENCODER_MOTOR_LEFT_P,  RobotConfig::ENCODER_MOTOR_LEFT_H);
+Encoder        encoderRight(RobotConfig::ENCODER_MOTOR_RIGHT_P, RobotConfig::ENCODER_MOTOR_RIGHT_H);
+
+// ── Stratégies ───────────────────────────────
+StrategyManager    strategyManager;
+AdamantineStrategy stratAdamantine;
+BerserkerStrategy  stratBerserker;
+CircleDohyoStrategy stratCircle;
+
+// ── Communication ────────────────────────────
+CommunicationManager commManager;
+
+// ── Localisation ─────────────────────────────
+EKF ekf;
+
+// ── PID vitesse moteurs ───────────────────────
+PID pidLeft (1.2f, 0.05f, 0.02f);
+PID pidRight(1.2f, 0.05f, 0.02f);
 
 // ═══════════════════════════════════════════════════════════════
-//  TÂCHE 1 — taskSensors
-//
-//  Ce qu'elle fait :
-//  → Lit la batterie toutes les 500 ms
-//  → Affiche la tension dans le moniteur série
-//
-//  Ce qu'on apprend :
-//  → vTaskDelayUntil  : pause précise sans dérive
-//  → SensorManager    : accès thread-safe via mutex interne
+//  Callbacks pour taskCommand
 // ═══════════════════════════════════════════════════════════════
-void taskSensors(void* /*pv*/) {
 
-    // xLastWakeTime mémorise l'heure du dernier réveil
-    // → vTaskDelayUntil calcule exactement quand se réveiller
-    // → la tâche tourne EXACTEMENT toutes les 500 ms, même si
-    //   le travail à l'intérieur prend un peu de temps
-    TickType_t xLastWakeTime = xTaskGetTickCount();
+void onStrategy(const char* name) {
+    if      (strcmp(name, "ADAMANTINE") == 0) strategyManager.setStrategy(&stratAdamantine);
+    else if (strcmp(name, "BERSERKER")  == 0) strategyManager.setStrategy(&stratBerserker);
+    else if (strcmp(name, "CIRCLE")     == 0) strategyManager.setStrategy(&stratCircle);
+    else LOGF("[main] Stratégie inconnue : %s\n", name);
+}
 
-    for (;;) {
+void onLed(uint8_t r, uint8_t g, uint8_t b) {
+    led.setColor(r, g, b);
+}
 
-        // ── Lecture batterie (thread-safe via mutex interne) ──
-        SensorData batt = sensorManager.getDataByPosition(SensorPosition::CENTER);
+// Valeurs PID courantes — modifiables individuellement depuis le HMI
+static float g_kp = 1.2f, g_ki = 0.05f, g_kd = 0.02f;
 
-        // ── Affichage ─────────────────────────────────────────
-        if (batt.isValid) {
-            LOGF("[Sensors] Batterie : %.2f V\n", batt.value.scalar);
-        } else {
-            LOGF("[Sensors] Batterie : donnée invalide::%d et V = %.2f", batt.isValid, batt.value.scalar);
-        }
+void onPidKp(float v) {
+    g_kp = v;
+    pidLeft.setGains(g_kp, g_ki, g_kd);
+    pidRight.setGains(g_kp, g_ki, g_kd);
+}
 
-        // ── Pause précise de 500 ms ───────────────────────────
-        // vTaskDelayUntil est MIEUX que vTaskDelay(500) car :
-        // vTaskDelay(500)      → 500 ms APRES la fin du travail
-        // vTaskDelayUntil(500) → 500 ms DEPUIS le début (période fixe)
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(500));
-    }
+void onPidKi(float v) {
+    g_ki = v;
+    pidLeft.setGains(g_kp, g_ki, g_kd);
+    pidRight.setGains(g_kp, g_ki, g_kd);
+}
+
+void onPidKd(float v) {
+    g_kd = v;
+    pidLeft.setGains(g_kp, g_ki, g_kd);
+    pidRight.setGains(g_kp, g_ki, g_kd);
+}
+
+void onPoseReset() {
+    ekf.reset();
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  TÂCHE 2 — taskBlink
-//
-//  Ce qu'elle fait :
-//  → Fait clignoter la LED embarquée toutes les secondes
-//
-//  Ce qu'on apprend :
-//  → 2 tâches tournent vraiment en parallèle
-//  → si taskSensors était bloquée (ex: delay()), taskBlink
-//    continuerait quand même de clignoter → preuve du parallélisme
+//  Paramètres de tâches (structs passées via pvParameters)
 // ═══════════════════════════════════════════════════════════════
-void taskBlink(void* /*pv*/) {
-
-    pinMode(LED_PIN, OUTPUT);
-
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-
-    for (;;) {
-        digitalWrite(LED_PIN, HIGH);
-        vTaskDelay(pdMS_TO_TICKS(100));   // LED allumée 100 ms
-
-        digitalWrite(LED_PIN, LOW);
-
-        LOG("[Blink] LED clignote — les 2 tâches tournent en parallèle ✅");
-
-        // Attend le prochain cycle d'1 seconde
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1000));
-    }
-}
+EKFParams         ekfParams = { &ekf, &encoderLeft, &encoderRight };
+CommandTaskParams cmdParams = {
+    &strategyManager,
+    onStrategy,
+    onLed,
+    onPidKp,
+    onPidKi,
+    onPidKd,
+    onPoseReset
+};
 
 // ═══════════════════════════════════════════════════════════════
-//  setup() — point d'entrée
+//  setup()
 // ═══════════════════════════════════════════════════════════════
 void setup() {
     Serial.begin(115200);
 
-    // ── ÉTAPE 1 : créer le mutex Serial AVANT tout LOG ────────
+    // ── Mutex Serial ──────────────────────────
     g_logMutex = xSemaphoreCreateMutex();
-    LOG("=== Mini Sumo — boot FreeRTOS minimal ===");
 
-    // ── ÉTAPE 2 : enregistrer et initialiser les capteurs ─────
-    sensorManager.add(new BattSensor(SensorPosition::CENTER), true);
+    LOG("[main] Démarrage robot mini-sumo");
 
-    if (!sensorManager.initAll()) {
-        LOG("[setup] ERREUR init capteurs !");
-    } else {
-        LOG("[setup] BattSensor prêt.");
+    // ── LED ───────────────────────────────────
+    led.init();
+    led.setColor(LedColor::YELLOW);  // initialisation en cours
+
+    // ── Moteurs ───────────────────────────────
+    driverManager.add(new DriverMotor(), DriverRole::MAIN);
+    if (!driverManager.initAll()) {
+        LOG("[main] ERREUR init moteurs");
+        led.setColor(LedColor::RED);
     }
 
-    // ── ÉTAPE 3 : créer les tâches ────────────────────────────
-    //
-    //  xTaskCreatePinnedToCore(
-    //      fonction,    ← la tâche à exécuter
-    //      "nom",       ← pour le débogage
-    //      stack,       ← RAM réservée (bytes)
-    //      paramètre,   ← passé à void* pv (nullptr ici)
-    //      priorité,    ← 0=basse, 24=haute
-    //      handle,      ← pour contrôler la tâche après (nullptr = on garde pas)
-    //      core         ← 0 ou 1
-    //  );
+    // ── Encodeurs ─────────────────────────────
+    encoderLeft.init(true);   // true  = gauche
+    encoderRight.init(false); // false = droite
 
+    // ── Capteurs ──────────────────────────────
+    sensorManager.add(new LidarSensor(),
+                      true);
+
+    sensorManager.add(new LineSensor(SensorPosition::FRONT_LEFT,  512),
+                      true);
+    sensorManager.add(new LineSensor(SensorPosition::FRONT_RIGHT, 512),
+                      true);
+    sensorManager.add(new LineSensor(SensorPosition::BACK,        512),
+                      true);
+
+    sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR,  SensorPosition::FRONT_LEFT),
+                      true);
+    sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR1, SensorPosition::FRONT_RIGHT),
+                      true);
+
+    sensorManager.add(new IMUSensor(SensorPosition::CENTER),
+                      true);
+
+    sensorManager.add(new BattSensor(SensorPosition::BATTERY),
+                      true);
+
+    sensorManager.add(new SensorSwitch(RobotConfig::START_BUTTON),
+                      true);
+
+    if (!sensorManager.initAll()) {
+        LOG("[main] ERREUR init capteurs");
+        led.setColor(LedColor::RED);
+    }
+
+    // ── EKF ───────────────────────────────────
+    ekf.reset();
+
+    // ── PID ───────────────────────────────────
+    pidLeft.setLimits(-255, 255);
+    pidRight.setLimits(-255, 255);
+
+    // ── Stratégie par défaut ──────────────────
+    strategyManager.setStrategy(&stratAdamantine);
+
+    // ── Communication WiFi/MQTT uniquement ───────────────────
+    commManager.setAutoSelectEnabled(false);
+    commManager.configureWifi(
+        "Frank",
+        "ftel7488",
+        "172.17.45.34",
+        1883,
+        "robot/telemetry",
+        "robot/cmd"
+    );
+    commManager.selectChannel(CommChannel::WIFI);
+    commManager.begin();
+    
+    // ── Queue commandes ───────────────────────
+    RobotQueues::init();
+
+    // ── Tâches FreeRTOS ───────────────────────
     xTaskCreatePinnedToCore(
         taskSensors, "Sensors",
-        2048, nullptr, 2, nullptr, 1
-    );
+        RTOSConfig::STACK_SENSORS, &sensorManager,
+        RTOSConfig::PRIO_SENSORS,  nullptr,
+        RTOSConfig::CORE_SENSORS);
 
     xTaskCreatePinnedToCore(
-        taskBlink, "Blink",
-        1024, nullptr, 1, nullptr, 1
-    );
+        taskEncoders, "Encoders",
+        RTOSConfig::STACK_ENCODER, &ekfParams,
+        RTOSConfig::PRIO_ENCODER,  nullptr,
+        RTOSConfig::CORE_ENCODER);
 
-    LOG("[setup] 2 tâches démarrées — observe le moniteur série !");
+    xTaskCreatePinnedToCore(
+        taskStrategy, "Strategy",
+        RTOSConfig::STACK_STRATEGY, &strategyManager,
+        RTOSConfig::PRIO_STRATEGY,  nullptr,
+        RTOSConfig::CORE_STRATEGY);
+
+    xTaskCreatePinnedToCore(
+        taskMotors, "Motors",
+        RTOSConfig::STACK_MOTORS, &driverManager,
+        RTOSConfig::PRIO_MOTORS,  nullptr,
+        RTOSConfig::CORE_MOTORS);
+
+    xTaskCreatePinnedToCore(
+        taskComm, "Comm",
+        RTOSConfig::STACK_COMM, &commManager,
+        RTOSConfig::PRIO_COMM,  nullptr,
+        RTOSConfig::CORE_COMM);
+
+    xTaskCreatePinnedToCore(
+        taskCommand, "Command",
+        RTOSConfig::STACK_COMMAND, &cmdParams,
+        RTOSConfig::PRIO_COMMAND,  nullptr,
+        RTOSConfig::CORE_COMMAND);
+
+    // ── Prêt ──────────────────────────────────
+    led.setColor(LedColor::GREEN);
+    LOG("[main] Toutes les tâches lancées — robot prêt");
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  loop() — supprimée
-//
-//  Avec FreeRTOS, loop() est elle-même une tâche Arduino.
-//  On la supprime pour libérer ses ressources.
-//  vTaskDelete(nullptr) = "supprime la tâche courante"
+//  loop() — vide : tout est géré par les tâches FreeRTOS
 // ═══════════════════════════════════════════════════════════════
 void loop() {
-    vTaskDelete(nullptr);
+    // LED reflète l'état courant du robot
+    switch (RobotContext::instance().getState()) {
+        case RobotConstants::State::STANDBY: led.setColor(LedColor::YELLOW); break;
+        case RobotConstants::State::SEARCH:  led.setColor(LedColor::BLUE);   break;
+        case RobotConstants::State::ATTACK:  led.setColor(LedColor::RED);    break;
+        case RobotConstants::State::EVADE:   led.setColor(LedColor::ORANGE); break;
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
 }

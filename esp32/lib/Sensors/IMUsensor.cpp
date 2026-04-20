@@ -5,7 +5,7 @@
  */
 
 #include "IMUSensor.hpp"
-
+#include "RTOSConfig.hpp"
 // ─────────────────────────────────────────────
 //  Constructeur
 // ─────────────────────────────────────────────
@@ -25,7 +25,7 @@ bool IMUSensor::init() {
     // Tente de démarrer la communication I2C avec le MPU6050.
     // begin() retourne false si le capteur ne répond pas.
     if (!_mpu.begin()) {
-        Serial.println("[IMUSensor] MPU6050 introuvable sur le bus I2C.");
+        LOG("[IMUSensor] MPU6050 introuvable sur le bus I2C.");
         return false;
     }
 
@@ -39,7 +39,7 @@ bool IMUSensor::init() {
     // causé par les vibrations des moteurs
     _mpu.setFilterBandwidth(IMUConfig::FILTER_BW);
 
-    Serial.println("[IMUSensor] MPU6050 initialisé avec succès.");
+   LOG("[IMUSensor] MPU6050 initialisé avec succès.");
     return true;
 }
 

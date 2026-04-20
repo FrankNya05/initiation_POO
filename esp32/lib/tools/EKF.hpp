@@ -85,10 +85,10 @@ public:
 
     // ── Mise à jour — gyroscope IMU ───────────────────────────
     //  Appeler à chaque cycle taskSensors (50 Hz)
-    //  @param gz    vitesse angulaire Z en rad/s
-    //  @param dtSec intervalle de temps en secondes
-   void updateIMU(float gz, float dtSec) {
-    const float zMeasured = gz * dtSec;
+    //  @param gyroRate  vitesse angulaire de rotation (axe actif) en rad/s
+    //  @param dtSec     intervalle de temps en secondes
+    void updateIMU(float gyroRate, float dtSec) {
+    const float zMeasured = gyroRate * dtSec;
     // Calcul de la variation d'angle vue par les encodeurs
     float dThetaEncoder = _theta - _thetaPrev;
     

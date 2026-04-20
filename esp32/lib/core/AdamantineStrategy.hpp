@@ -25,11 +25,19 @@
 class AdamantineStrategy : public StrategyInterface {
 public:
 
-    const char* name() const override { return "Adamantine"; }
+    const char* name()  const override { return "Adamantine"; }
+    LedColor    color() const override { return LedColor::CYAN; }
 
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
 
         using AC = RobotConstants::ActionCommand;
+
+        // ── 0. EVADE verrouillé — durée minimale garantie ─────
+        uint32_t now = millis();
+        if (now < _evadeUntil) {
+            ctx.setState(RobotConstants::State::EVADE);
+            return _evadeCmd;
+        }
 
         // ── 1. Bords — priorité absolue ───────────────────────
         SensorData lineFL = ctx.getLineData(SensorPosition::FRONT_LEFT);
@@ -40,25 +48,14 @@ public:
         bool fr = lineFR.isValid && lineFR.value.scalar > 0.0f;
         bool b  = lineB.isValid  && lineB.value.scalar  > 0.0f;
 
-        if (b) {
-            // Bord arrière → avancer et pivoter vers le centre
+        if (b || fl || fr) {
+            _evadeUntil = now + EVADE_MIN_MS;
+            if (b)             { _evadeCmd = AC{  SPEED_CHARGE,  SPEED_CHARGE }; }
+            else if (fl && fr) { _evadeCmd = AC{ -SPEED_EVADE,  -SPEED_EVADE  }; }
+            else if (fl)       { _evadeCmd = AC{ -SPEED_EVADE,  -SPEED_SLOW   }; }
+            else               { _evadeCmd = AC{ -SPEED_SLOW,   -SPEED_EVADE  }; }
             ctx.setState(RobotConstants::State::EVADE);
-            return AC{ SPEED_CHARGE, SPEED_CHARGE };
-        }
-        if (fl && fr) {
-            // Les deux capteurs avant → reculer droit
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_EVADE, -SPEED_EVADE };
-        }
-        if (fl) {
-            // Bord avant-gauche → reculer en virant à droite
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_EVADE, -SPEED_SLOW };
-        }
-        if (fr) {
-            // Bord avant-droit → reculer en virant à gauche
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_SLOW, -SPEED_EVADE };
+            return _evadeCmd;
         }
 
         // ── 2. Impact IMU — choc détecté → repositionnement ───
@@ -114,13 +111,18 @@ public:
             if (dist < LIDAR_CLOSE_M) {
                 ctx.setState(RobotConstants::State::ATTACK);
 
-                if (angle <= FRONT_ANGLE || angle >= (360.0f - FRONT_ANGLE)) {
-                    return AC{ SPEED_CHARGE, SPEED_CHARGE };
+                // Lidar 0° = arrière robot, 180° = avant robot
+                float diff = angle - 180.0f;
+                if (diff >  180.0f) diff -= 360.0f;
+                if (diff < -180.0f) diff += 360.0f;
+
+                if (fabsf(diff) <= FRONT_ANGLE) {
+                    return AC{ SPEED_CHARGE, SPEED_CHARGE };  // aligné → fonce
                 }
-                if (angle < 180.0f) {
-                    return AC{ SPEED_CHARGE, SPEED_TURN };
+                if (diff > 0.0f) {
+                    return AC{ SPEED_CHARGE, SPEED_TURN };    // droite
                 }
-                return AC{ SPEED_TURN, SPEED_CHARGE };
+                return AC{ SPEED_TURN, SPEED_CHARGE };        // gauche
             }
 
             // Ennemi à distance moyenne → recul latéral pour esquiver
@@ -139,11 +141,16 @@ public:
     }
 
 private:
+    // ── EVADE verrouillé ─────────────────────────────────────
+    uint32_t                       _evadeUntil = 0;
+    RobotConstants::ActionCommand  _evadeCmd   = {0, 0};
+    static constexpr uint32_t      EVADE_MIN_MS = 350;
+
     // ── Seuils ────────────────────────────────────────────────
     static constexpr float IMPACT_THRESHOLD_G = 2.0f;  // seuil choc IMU (m/s² ≈ 2g)
     static constexpr float TOF_CLOSE_MM      = 150.0f; // TOF : très proche (mm)
-    static constexpr float LIDAR_CLOSE_M =   0.50f; // Lidar : contre-attaque (m)
-    static constexpr float LIDAR_MID_M   =   0.90f; // Lidar : recul latéral (m)
+    static constexpr float LIDAR_CLOSE_M =   0.35f; // Lidar : contre-attaque (m) — dohyo ∅0.7 m
+    static constexpr float LIDAR_MID_M   =   0.65f; // Lidar : orienter vers ennemi (m)
     static constexpr float FRONT_ANGLE   =  20.0f;  // tolérance alignement (°)
 
     // ── Vitesses ──────────────────────────────────────────────

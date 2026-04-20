@@ -21,9 +21,15 @@ public:
 
     StrategyManager() = default;
 
+    // ── Enregistrer une stratégie (ordre = ordre de cycle) ────
+    void registerStrategy(StrategyInterface* s) {
+        if (_count < MAX_STRATEGIES) {
+            _strategies[_count++] = s;
+            if (_count == 1) setStrategy(s);  // première = défaut
+        }
+    }
+
     // ── Changer de stratégie ──────────────────────────────────
-    //  Appelé avant le match ou dynamiquement selon l'état.
-    //  Ownership : le caller garde la responsabilité des objets.
     void setStrategy(StrategyInterface* strategy) {
         _current = strategy;
         if (_current) {
@@ -31,24 +37,40 @@ public:
         }
     }
 
-    // ── Exécuter la stratégie courante ────────────────────────
-    //  Retourne STOP si aucune stratégie n'est définie.
-    RobotConstants::ActionCommand executeStrategy(RobotContext& ctx) {
-        if (!_current) {
-            return RobotConstants::ActionCommand{};   // stop par défaut
+    // ── Passer à la stratégie suivante (cycle) ────────────────
+    void nextStrategy() {
+        if (_count == 0) return;
+        _currentIdx = (_currentIdx + 1) % _count;
+        setStrategy(_strategies[_currentIdx]);
+    }
+
+    // ── Sélectionner par nom (commande HMI) ───────────────────
+    void setByName(const char* name) {
+        for (uint8_t i = 0; i < _count; i++) {
+            if (strcmp(_strategies[i]->name(), name) == 0) {
+                _currentIdx = i;
+                setStrategy(_strategies[i]);
+                return;
+            }
         }
+        LOGF("[StrategyManager] Stratégie inconnue : %s\n", name);
+    }
+
+    // ── Exécuter la stratégie courante ────────────────────────
+    RobotConstants::ActionCommand executeStrategy(RobotContext& ctx) {
+        if (!_current) return RobotConstants::ActionCommand{};
         return _current->execute(ctx);
     }
 
-    // ── Accesseurs debug ──────────────────────────────────────
-    const char* currentName() const {
-        return _current ? _current->name() : "none";
-    }
-
-    bool hasStrategy() const {
-        return _current != nullptr;
-    }
+    // ── Accesseurs ────────────────────────────────────────────
+    const char* currentName()  const { return _current ? _current->name()  : "none"; }
+    LedColor    currentColor() const { return _current ? _current->color() : LedColor::YELLOW; }
+    bool        hasStrategy()  const { return _current != nullptr; }
 
 private:
-    StrategyInterface* _current = nullptr;  // observateur — pas propriétaire
+    static constexpr uint8_t MAX_STRATEGIES = 8;
+    StrategyInterface* _strategies[MAX_STRATEGIES] = {};
+    uint8_t            _count      = 0;
+    uint8_t            _currentIdx = 0;
+    StrategyInterface* _current    = nullptr;
 };

@@ -12,6 +12,7 @@ private:
     SensorPosition position;
     uint8_t        pin;
     int            seuil;
+    bool           inverted;
 
     static uint8_t positionToPin(SensorPosition pos) {
         switch (pos) {
@@ -24,8 +25,8 @@ private:
     }
 
 public:
-    LineSensor(SensorPosition p, int s)
-        : position(p), pin(positionToPin(p)), seuil(s) {}
+    LineSensor(SensorPosition p, int s, bool inv = false)
+        : position(p), pin(positionToPin(p)), seuil(s), inverted(inv) {}
 
     const char* typeId() const override { return "LINE"; }
 
@@ -37,7 +38,8 @@ public:
 
     bool update() override {
         int valeur = analogRead(pin);
-        data.value     = SensorValue(valeur < seuil ? 1.0f : 0.0f);
+        bool border = (valeur < seuil);  // LOW = blanc (bord), HIGH = noir (ring)
+        data.value     = SensorValue(border ? 1.0f : 0.0f);
         data.position  = position;
         data.isValid   = true;
         data.timestamp = millis();

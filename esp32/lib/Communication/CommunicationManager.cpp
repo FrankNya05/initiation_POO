@@ -16,13 +16,13 @@ CommunicationManager::CommunicationManager(HardwareSerial& uart_serial,
     : ble_(std::make_unique<RobotBLEServer>()),
       uart_(std::make_unique<UARTComm>(uart_serial, uart_baud)),
       active_comm_(nullptr),          // Not yet pointing anywhere — set in selectChannel()
-      current_channel_(CommChannel::BLE),
+      current_channel_(CommChannel::WIFI),
       auto_select_enabled_(false)
 {
-    // Point active_comm_ at the default channel (BLE).
-    // We do this via selectChannel() rather than directly, so the logic
-    // lives in one place only.
-    selectChannel(CommChannel::BLE);
+    // wifi_ n'est pas encore configuré ici → selectChannel() replie sur UART.
+    // Dès que configureWifi() + selectChannel(WIFI) sont appelés, le canal actif
+    // bascule automatiquement sur MQTT.
+    selectChannel(CommChannel::WIFI);
 }
 
 // ============================================================================
@@ -98,18 +98,23 @@ CommChannel CommunicationManager::activeChannel() const {
 // ============================================================================
 
 void CommunicationManager::begin() {
-    Serial.println("[CommManager] Initializing BLE channel...");
-    ble_->begin();
-
-    if (wifi_ != nullptr) {
-        Serial.println("[CommManager] Initializing WiFi/MQTT channel...");
-        wifi_->begin();
+    switch (current_channel_) {
+        case CommChannel::BLE:
+            Serial.println("[CommManager] Initializing BLE channel...");
+            ble_->begin();
+            break;
+        case CommChannel::WIFI:
+            if (wifi_ != nullptr) {
+                Serial.println("[CommManager] Initializing WiFi/MQTT channel...");
+                wifi_->begin();
+            }
+            break;
+        case CommChannel::UART:
+            Serial.println("[CommManager] Initializing UART channel...");
+            uart_->begin();
+            break;
     }
-
-    Serial.println("[CommManager] Initializing UART channel...");
-    uart_->begin();
-
-    Serial.println("[CommManager] All channels initialized.");
+    Serial.println("[CommManager] Channel initialized.");
 }
 
 void CommunicationManager::send(const std::string& data) {
@@ -145,13 +150,15 @@ void CommunicationManager::onDisconnect(std::function<void()> callback) {
 // ============================================================================
 
 void CommunicationManager::update() {
-    // UART : polling permanent (pas d'interruption hardware sur réception)
-    uart_->update();
-
-    // WiFi/MQTT : maintenir la connexion et traiter les messages entrants.
-    // loop() doit être appelé fréquemment — on le fait ici à chaque cycle taskComm.
-    if (wifi_ != nullptr) {
-        wifi_->loop();
+    switch (current_channel_) {
+        case CommChannel::UART:
+            uart_->update();
+            break;
+        case CommChannel::WIFI:
+            if (wifi_ != nullptr) wifi_->loop();
+            break;
+        default:
+            break;
     }
 
     if (auto_select_enabled_) {
