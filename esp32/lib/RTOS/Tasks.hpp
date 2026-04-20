@@ -10,14 +10,20 @@
 #include "Queues.hpp"
 #include "Encoder.hpp"
 #include "EKF.hpp"
+#include "PID.hpp"
 
 // ═══════════════════════════════════════════════════════════════
-//  Paramètres passés à taskEncoders (intègre aussi l'EKF)
+//  Paramètres passés à taskEncoders (intègre EKF + PID vitesse)
 // ═══════════════════════════════════════════════════════════════
 struct EKFParams {
-    EKF*     ekf;
-    Encoder* left;
-    Encoder* right;
+    EKF*            ekf;
+    Encoder*        left;
+    Encoder*        right;
+    DriverManager*  driver;
+    PID*            pidLeft;
+    PID*            pidRight;
+    volatile int    lastPwmLeft  = 0;  // debug — dernière sortie PID gauche
+    volatile int    lastPwmRight = 0;  // debug — dernière sortie PID droit
 };
 
 // ───────────────────────────────────────────────────────────────
@@ -284,13 +290,12 @@ void taskComm(void* pvParameters)
             bool lineFLbool = (lineVal(lineFL) == 1);
             bool lineFRbool = (lineVal(lineFR) == 1);
             bool lineBbool  = (lineVal(lineB)  == 1);
-            // Note : BACK_LEFT n'est pas dans _posToIndex du RobotContext
-            // → on envoie false pour backLeft (hardware non câblé séparément)
- 
-            // ── Sérialisation au format protocole V1 ──────────────────
-            // Enveloppe {"type":"TELEMETRY","payload":{...}} attendue par le HMI.
-            // Buffer agrandi à 384 pour contenir l'enveloppe complète.
-            char buf[512];
+
+            // TOF
+            float tofFLmm = tofFL.isValid ? tofFL.value.scalar : -1.0f;
+            float tofFRmm = tofFR.isValid ? tofFR.value.scalar : -1.0f;
+
+            char buf[640];
             snprintf(buf, sizeof(buf),
                 "{"
                     "\"type\":\"TELEMETRY\","
@@ -306,6 +311,10 @@ void taskComm(void* pvParameters)
                             "\"frontRight\":%s,"
                             "\"backLeft\":false,"
                             "\"back\":%s"
+                        "},"
+                        "\"tof\":{"
+                            "\"frontLeft\":%.0f,"
+                            "\"frontRight\":%.0f"
                         "},"
                         "\"lidar\":{"
                             "\"dist\":%.3f,"
@@ -334,6 +343,8 @@ void taskComm(void* pvParameters)
                 lineFLbool   ? "true" : "false",
                 lineFRbool   ? "true" : "false",
                 lineBbool    ? "true" : "false",
+                tofFLmm,
+                tofFRmm,
                 lidarDist,
                 lidarAngle,
                 lidarValid   ? "true" : "false",
@@ -357,6 +368,8 @@ void taskComm(void* pvParameters)
 // ───────────────────────────────────────────────────────────────
 void taskEncoders(void* pvParameters)
 {
+    static constexpr float SPEED_MAX_RPM = 160.0f; // vitesse maxi mesurée ~130 RPM à 200/255 PWM
+
     EKFParams* p = static_cast<EKFParams*>(pvParameters);
 
     TickType_t lastWake = xTaskGetTickCount();
@@ -367,10 +380,10 @@ void taskEncoders(void* pvParameters)
         const float deltaMs = RTOSConfig::PERIOD_ENCODER * portTICK_PERIOD_MS;
 
         // 1. Lire et remettre à zéro atomiquement (une seule fois)
-        int32_t pulsesLeft  = p->left->getAndReset();
-        int32_t pulsesRight = p->right->getAndReset();
+        int32_t pulsesLeft  =  p->left->getAndReset();
+        int32_t pulsesRight = -p->right->getAndReset();  // encodeur droit câblé inversé
 
-        // 2. Publier RPM + position dans RobotContext
+        // 2. Calculer RPM et publier dans RobotContext
         RobotContext::EncoderData left, right;
 
         left.rpm        = p->left->getRPM(pulsesLeft, deltaMs);
@@ -399,6 +412,38 @@ void taskEncoders(void* pvParameters)
 
         // 5. Publier la pose estimée
         ctx.setPose(p->ekf->getPose());
+
+        // 6. Asservissement de vitesse — feedforward + correction PID ──
+        RobotConstants::ActionCommand cmd = ctx.getMotorSpeeds();
+
+        // Feedforward + correction PID pour égaliser les vitesses
+        static RobotConstants::ActionCommand prevCmd = {0, 0};
+        if (cmd.leftSpeed != prevCmd.leftSpeed || cmd.rightSpeed != prevCmd.rightSpeed) {
+            p->pidLeft->reset();
+            p->pidRight->reset();
+            prevCmd = cmd;
+        }
+
+        if (cmd.isStop()) {
+            p->driver->setSpeedAll(0, 0);
+            p->pidLeft->reset();
+            p->pidRight->reset();
+        } else {
+            float targetL = (cmd.leftSpeed  / 255.0f) * SPEED_MAX_RPM;
+            float targetR = (cmd.rightSpeed / 255.0f) * SPEED_MAX_RPM;
+
+            p->pidLeft->setSetpoint(targetL);
+            p->pidRight->setSetpoint(targetR);
+
+            int pwmL = cmd.leftSpeed  + (int)p->pidLeft->compute(left.rpm);
+            int pwmR = cmd.rightSpeed + (int)p->pidRight->compute(right.rpm);
+            pwmL = constrain(pwmL, -255, 255);
+            pwmR = constrain(pwmR, -255, 255);
+
+            p->lastPwmLeft  = pwmL;
+            p->lastPwmRight = pwmR;
+            p->driver->setSpeedAll(pwmL, pwmR);
+        }
 
         vTaskDelayUntil(&lastWake, RTOSConfig::PERIOD_ENCODER);
     }

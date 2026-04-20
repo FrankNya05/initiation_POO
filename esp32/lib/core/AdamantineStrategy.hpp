@@ -80,24 +80,13 @@ public:
         SensorData tofFL = ctx.getTOFData(SensorPosition::FRONT_LEFT);
         SensorData tofFR = ctx.getTOFData(SensorPosition::FRONT_RIGHT);
 
-        bool tofCloseL = tofFL.isValid && tofFL.value.scalar < TOF_CLOSE_MM;
-        bool tofCloseR = tofFR.isValid && tofFR.value.scalar < TOF_CLOSE_MM;
+        bool tofCloseL = tofFL.isValid && tofFL.value.scalar > 0.0f && tofFL.value.scalar < TOF_CLOSE_MM;
+        bool tofCloseR = tofFR.isValid && tofFR.value.scalar > 0.0f && tofFR.value.scalar < TOF_CLOSE_MM;
 
-        // ── 4. (anciennement 2.) TOF
+        // ── 4. TOF — les deux capteurs doivent confirmer (évite faux positifs)
         if (tofCloseL && tofCloseR) {
-            // Ennemi droit devant très près → reculer puis pivoter
             ctx.setState(RobotConstants::State::EVADE);
             return AC{ -SPEED_EVADE, -SPEED_EVADE };
-        }
-        if (tofCloseL) {
-            // Ennemi très proche à gauche → reculer en virant à droite
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_SLOW, -SPEED_EVADE };
-        }
-        if (tofCloseR) {
-            // Ennemi très proche à droite → reculer en virant à gauche
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_EVADE, -SPEED_SLOW };
         }
 
         // ── 3. Lidar — analyse de la distance ennemi ──────────
@@ -148,7 +137,7 @@ private:
 
     // ── Seuils ────────────────────────────────────────────────
     static constexpr float IMPACT_THRESHOLD_G = 2.0f;  // seuil choc IMU (m/s² ≈ 2g)
-    static constexpr float TOF_CLOSE_MM      = 150.0f; // TOF : très proche (mm)
+    static constexpr float TOF_CLOSE_MM      =  80.0f; // TOF : contact imminent (mm)
     static constexpr float LIDAR_CLOSE_M =   0.35f; // Lidar : contre-attaque (m) — dohyo ∅0.7 m
     static constexpr float LIDAR_MID_M   =   0.65f; // Lidar : orienter vers ennemi (m)
     static constexpr float FRONT_ANGLE   =  20.0f;  // tolérance alignement (°)

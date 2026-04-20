@@ -3,29 +3,21 @@
 #include "RobotContext.hpp"
 
 // ═══════════════════════════════════════════════════════════════
-//  BerserkerStrategy.hpp — Stratégie offensive maximale
+//  BerserkerStrategy.hpp — Stratégie offensive maximale (TOF only)
 //
 //  Philosophie : attaquer sans relâche, à pleine puissance
 //
 //  Priorités (décroissantes) :
-//  1. ÉVADE   : bord détecté → récupération ultra-rapide (minimal)
+//  1. ÉVADE   : bord détecté → récupération ultra-rapide
 //  2. IMPACT  : choc IMU > 3g → continuer à pousser pleine puissance
-//  3. ATTAQUE : TOF < 20 cm → charge immédiate pleine puissance
-//  4. ATTAQUE : Lidar détecte → fonce droit sur l'ennemi
-//  5. SEARCH  : rien → rotation rapide pour trouver l'ennemi
-//
-//  Différences vs Adamantine :
-//  - Impact détecté → maintenir la pression (ne jamais reculer)
-//  - Jamais de recul latéral — toujours vers l'avant
-//  - Seuil de détection plus large (1.20 m vs 0.90 m)
-//  - Vitesse de rotation de recherche plus rapide
-//  - Récupération bord plus agressive (recul court, repart vite)
+//  3. ATTAQUE : TOF détecte ennemi (<500mm) → charge avec correction
+//  4. SEARCH  : rien → rotation rapide pour trouver l'ennemi
 //
 //  Capteurs utilisés :
 //  - LineSensors FRONT_LEFT / FRONT_RIGHT / BACK → bords
 //  - IMU ax/ay                                  → détection d'impact
-//  - TOF FRONT_LEFT / FRONT_RIGHT               → détection rapprochée
-//  - Lidar FRONT                                → angle + distance ennemi
+//  - TOF FRONT_LEFT / FRONT_RIGHT               → détection + correction
+//  (Lidar non utilisé dans cette stratégie)
 // ═══════════════════════════════════════════════════════════════
 
 class BerserkerStrategy : public StrategyInterface {
@@ -70,53 +62,33 @@ public:
             float impact = sqrtf(imu.value.imu.ax * imu.value.imu.ax
                                + imu.value.imu.ay * imu.value.imu.ay);
             if (impact > IMPACT_THRESHOLD_G) {
-                // Choc ! On est en contact → pousser pleine puissance
                 ctx.setState(RobotConstants::State::ATTACK);
                 return AC{ SPEED_MAX, SPEED_MAX };
             }
         }
 
-        // ── 3. TOF — ennemi très proche → charge immédiate ────
+        // ── 3. TOF — détection et charge avec correction ──────
         SensorData tofFL = ctx.getTOFData(SensorPosition::FRONT_LEFT);
         SensorData tofFR = ctx.getTOFData(SensorPosition::FRONT_RIGHT);
 
-        bool tofCloseL = tofFL.isValid && tofFL.value.scalar < TOF_CLOSE_MM;
-        bool tofCloseR = tofFR.isValid && tofFR.value.scalar < TOF_CLOSE_MM;
+        bool detL = tofFL.isValid && tofFL.value.scalar > 0.0f && tofFL.value.scalar < TOF_DETECT_MM;
+        bool detR = tofFR.isValid && tofFR.value.scalar > 0.0f && tofFR.value.scalar < TOF_DETECT_MM;
 
-        if (tofCloseL || tofCloseR) {
-            // Ennemi détecté de près → charge pleine puissance
+        if (detL || detR) {
             ctx.setState(RobotConstants::State::ATTACK);
-            return AC{ SPEED_MAX, SPEED_MAX };
-        }
-
-        // ── 4. Lidar — traquer l'ennemi ───────────────────────
-        SensorData lidar = ctx.getLidarData();
-
-        if (lidar.isValid && lidar.value.vector.x < LIDAR_DETECT_M) {
-            ctx.setState(RobotConstants::State::ATTACK);
-
-            // Lidar 0° = arrière robot, 180° = avant robot
-            float diff = lidar.value.vector.y - 180.0f;
-            if (diff >  180.0f) diff -= 360.0f;
-            if (diff < -180.0f) diff += 360.0f;
-
-            // Ennemi aligné devant → charge directe
-            if (fabsf(diff) <= FRONT_ANGLE) {
+            if (detL && detR) {
+                // Ennemi centré → charge pleine puissance
                 return AC{ SPEED_MAX, SPEED_MAX };
             }
-            // Correction légère droite/gauche
-            if (diff > 0.0f && diff <= SIDE_ANGLE) {
-                return AC{ SPEED_MAX, SPEED_TURN };
-            }
-            if (diff < 0.0f && diff >= -SIDE_ANGLE) {
+            if (detL) {
+                // Ennemi à gauche → corriger vers gauche
                 return AC{ SPEED_TURN, SPEED_MAX };
             }
-            // Ennemi très à droite/gauche → pivot agressif
-            if (diff > 0.0f) return AC{  SPEED_MAX, -SPEED_PIVOT };
-            return              AC{ -SPEED_PIVOT,  SPEED_MAX };
+            // Ennemi à droite → corriger vers droite
+            return AC{ SPEED_MAX, SPEED_TURN };
         }
 
-        // ── 5. Rien détecté → rotation rapide pour chercher ───
+        // ── 4. Rien détecté → rotation rapide pour chercher ───
         ctx.setState(RobotConstants::State::SEARCH);
         return AC{ SPEED_SEARCH, -SPEED_SEARCH };
     }
@@ -125,19 +97,15 @@ private:
     // ── EVADE verrouillé ─────────────────────────────────────
     uint32_t                       _evadeUntil = 0;
     RobotConstants::ActionCommand  _evadeCmd   = {0, 0};
-    static constexpr uint32_t      EVADE_MIN_MS = 250;  // Berserker : récupération plus courte
+    static constexpr uint32_t      EVADE_MIN_MS = 250;
 
     // ── Seuils ────────────────────────────────────────────────
-    static constexpr float TOF_CLOSE_MM   = 200.0f;  // TOF : charge immédiate (mm)
-    static constexpr float LIDAR_DETECT_M =   1.20f; // Lidar : seuil de détection (m)
-    static constexpr float IMPACT_THRESHOLD_G = 3.0f; // seuil choc IMU (m/s²  ≈ 3g)
-    static constexpr float FRONT_ANGLE        = 15.0f; // alignement frontal (°)
-    static constexpr float SIDE_ANGLE     =  60.0f;  // correction latérale (°)
+    static constexpr float TOF_DETECT_MM       = 500.0f; // portée de détection TOF (mm)
+    static constexpr float IMPACT_THRESHOLD_G  =   3.0f; // seuil choc IMU (m/s² ≈ 3g)
 
     // ── Vitesses ──────────────────────────────────────────────
     static constexpr int SPEED_MAX    = 255;  // charge pleine puissance
     static constexpr int SPEED_EVADE  = 220;  // récupération bord
-    static constexpr int SPEED_TURN   = 140;  // correction de trajectoire
-    static constexpr int SPEED_PIVOT  = 180;  // pivot pour réorientation
+    static constexpr int SPEED_TURN   = 100;  // correction de trajectoire
     static constexpr int SPEED_SEARCH = 200;  // rotation de recherche rapide
 };
