@@ -79,6 +79,7 @@ void taskLidar(void* pv) {
 void setup() {
     Serial.begin(115200);
     g_logMutex = xSemaphoreCreateMutex();
+    RobotQueues::init();
 
     Wire.begin(21, 22);
     Wire.setClock(400000);

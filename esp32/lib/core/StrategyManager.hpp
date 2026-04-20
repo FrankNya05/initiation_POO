@@ -47,7 +47,7 @@ public:
     // ── Sélectionner par nom (commande HMI) ───────────────────
     void setByName(const char* name) {
         for (uint8_t i = 0; i < _count; i++) {
-            if (strcmp(_strategies[i]->name(), name) == 0) {
+            if (strcasecmp(_strategies[i]->name(), name) == 0) {
                 _currentIdx = i;
                 setStrategy(_strategies[i]);
                 return;
