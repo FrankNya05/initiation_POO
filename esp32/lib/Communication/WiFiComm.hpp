@@ -88,6 +88,7 @@ public:
 
     void begin() override {
         _instance = this;
+        _client.setBufferSize(1024);  // JSON telemetry ~500 bytes > défaut 256
         _client.setServer(_brokerIp, _brokerPort);
         _client.setCallback(_mqttCallback);
         _connectWifi();
