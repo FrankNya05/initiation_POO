@@ -139,7 +139,7 @@ private:
     static constexpr float IMPACT_THRESHOLD_G = 2.0f;  // seuil choc IMU (m/s² ≈ 2g)
     static constexpr float TOF_CLOSE_MM      =  80.0f; // TOF : contact imminent (mm)
     static constexpr float LIDAR_CLOSE_M =   0.35f; // Lidar : contre-attaque (m) — dohyo ∅0.7 m
-    static constexpr float LIDAR_MID_M   =   0.65f; // Lidar : orienter vers ennemi (m)
+    static constexpr float LIDAR_MID_M   =   0.55f; // Lidar : orienter vers ennemi (m) — max 600mm sur dohyo ∅700mm
     static constexpr float FRONT_ANGLE   =  20.0f;  // tolérance alignement (°)
 
     // ── Vitesses ──────────────────────────────────────────────
