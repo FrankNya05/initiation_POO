@@ -84,4 +84,5 @@ private:
 
     Adafruit_MPU6050 _mpu;       // objet de la librairie Adafruit
     SensorData       _data;      // données retournées par getData()
+    float            _gxBias = 0.0f;  // biais statique mesuré au démarrage (°/s)
 };

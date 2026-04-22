@@ -25,9 +25,13 @@ namespace LidarProtocol {
     constexpr uint32_t TOUR_MS = 150;
     constexpr uint32_t STARTUP_DELAY_MS = 100;
 
-    // Zone morte — châssis du robot bloque le scan autour de 0°
-    constexpr float BLIND_CENTER_DEG =   0.0f;  // centre de la zone masquée
-    constexpr float BLIND_HALF_DEG   =  20.0f;  // ±20° autour de 0° ignorés (340°–20°)
+    // Correction d'orientation de montage (0° physique lidar → décalage mesuré)
+    // Objet en face (devrait être 180°) apparaît à ~97° → offset = +83°
+    constexpr float MOUNT_OFFSET_DEG = 83.0f;
+
+    // Zone morte — châssis du robot bloque le scan autour de 0° (coordonnées corrigées)
+    constexpr float BLIND_CENTER_DEG =   0.0f;  // centre de la zone masquée (arrière robot)
+    constexpr float BLIND_HALF_DEG   =  80.0f;  // ±80° autour de 0° ignorés
 }
 
 class LidarSensor : public SensorsInterface {
@@ -49,8 +53,6 @@ public:
         , _started(false)
         , _nearestDist(LidarProtocol::MAX_DIST_M)
         , _nearestAngle(0)
-        , _filteredDist(LidarProtocol::MAX_DIST_M)
-        , _filteredAngle(0)
         , _validPoints(0)
         , _lastResetMs(0)
     {}
@@ -148,9 +150,6 @@ private:
 
     float _nearestDist;
     float _nearestAngle;
-
-    float _filteredDist;
-    float _filteredAngle;
 
     int _validPoints;
 
@@ -309,11 +308,9 @@ private:
     // ─────────────────────────────────────────────
     void _resetScan() {
 
-        _nearestDist   = LidarProtocol::MAX_DIST_M;
-        _nearestAngle  = 0;
-        _filteredDist  = LidarProtocol::MAX_DIST_M;
-        _filteredAngle = 0;
-        _validPoints   = 0;
+        _nearestDist  = LidarProtocol::MAX_DIST_M;
+        _nearestAngle = 0;
+        _validPoints  = 0;
     }
 
     // ─────────────────────────────────────────────
@@ -376,7 +373,14 @@ private:
                 continue;
 
             float angle = angleStart + i * angleStep;
+            angle += LidarProtocol::MOUNT_OFFSET_DEG;
             if (angle >= 360.0f) angle -= 360.0f;
+
+            // Rejeter les points dans la zone morte (châssis, coordonnées corrigées)
+            float aDiff = angle - LidarProtocol::BLIND_CENTER_DEG;
+            if (aDiff >  180.0f) aDiff -= 360.0f;
+            if (aDiff < -180.0f) aDiff += 360.0f;
+            if (fabsf(aDiff) <= LidarProtocol::BLIND_HALF_DEG) continue;
 
             _validPoints++;
 
@@ -387,23 +391,5 @@ private:
         }
 
         _validPoints = min(_validPoints, 250);
-
-        // Fix 3 : EMA uniquement si des points valides ont été trouvés
-        if (_validPoints > 0) {
-
-            // Fix 2 : EMA distance (linéaire, pas de problème circulaire)
-            _filteredDist = 0.7f * _filteredDist + 0.3f * _nearestDist;
-
-            // Fix 2 : EMA angle circulaire — évite le bug autour de 0°/360°
-            float diff = _nearestAngle - _filteredAngle;
-            if (diff >  180.0f) diff -= 360.0f;
-            if (diff < -180.0f) diff += 360.0f;
-            _filteredAngle += 0.3f * diff;
-            if (_filteredAngle <   0.0f) _filteredAngle += 360.0f;
-            if (_filteredAngle >= 360.0f) _filteredAngle -= 360.0f;
-
-            _nearestDist  = _filteredDist;
-            _nearestAngle = _filteredAngle;
-        }
     }
 }; // end class LidarSensor

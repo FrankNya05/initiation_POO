@@ -39,7 +39,25 @@ bool IMUSensor::init() {
     // causé par les vibrations des moteurs
     _mpu.setFilterBandwidth(IMUConfig::FILTER_BW);
 
-   LOG("[IMUSensor] MPU6050 initialisé avec succès.");
+    // Mesure du biais statique du gyroscope axe X (axe lacet du robot).
+    // Le MPU6050 n'a pas d'auto-calibration — on mesure la dérive à
+    // l'arrêt et on la soustrait dans update(). Robot immobile, moteurs
+    // éteints pendant les ~200 ms de cette mesure.
+    {
+        constexpr int    N   = 200;
+        constexpr int    DLY = 1;   // ms entre échantillons → ~200 ms total
+        double sum = 0.0;
+        sensors_event_t a, g, t;
+        for (int i = 0; i < N; i++) {
+            _mpu.getEvent(&a, &g, &t);
+            sum += g.gyro.x * RAD_TO_DEG;
+            delay(DLY);
+        }
+        _gxBias = (float)(sum / N);
+        Serial.printf("[IMUSensor] Biais gyro gx = %+.3f deg/s\n", _gxBias);
+    }
+
+    LOG("[IMUSensor] MPU6050 initialisé avec succès.");
     return true;
 }
 
@@ -66,7 +84,7 @@ bool IMUSensor::update() {
     // Note : Adafruit retourne le gyroscope en rad/s.
     // On convertit en °/s pour une utilisation plus intuitive
     // dans le contexte de l'asservissement du robot.
-    _data.value.imu.gx = gyro.gyro.x * RAD_TO_DEG;
+    _data.value.imu.gx = gyro.gyro.x * RAD_TO_DEG - _gxBias;
     _data.value.imu.gy = gyro.gyro.y * RAD_TO_DEG;
     _data.value.imu.gz = gyro.gyro.z * RAD_TO_DEG;
 

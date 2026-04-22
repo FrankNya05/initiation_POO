@@ -3,27 +3,16 @@
 #include "RobotContext.hpp"
 
 // ═══════════════════════════════════════════════════════════════
-//  TrackStrategy — Fonce vers tout obstacle entre 100 mm et 700 mm
+//  TrackStrategy — Fonce vers tout obstacle entre 100 mm et 670 mm
 //
 //  Lidar donne angle en degrés (0° = arrière robot, 180° = avant).
 //
-//  Confirmation adversaire (anti-faux-positifs) :
-//  - Lidar doit détecter la cible CONFIRM_CYCLES fois consécutives
-//    (3 cycles × 50 ms = 150 ms minimum de présence stable)
-//  - Si dist < TOF_GATE_M, au moins un TOF avant doit aussi voir
-//    quelque chose (< TOF_MAX_MM) pour valider la charge
-//
-//  Recherche intelligente (aucune cible détectée) :
-//  - Robot immobile pendant SEARCH_WAIT_MS (3 s) → lidar scanne
-//  - Si toujours rien → rotation 180° guidée par IMU (gx = lacet)
-//  - Puis nouvelle attente de 3 s
-//
 //  Logique :
-//  1. Bord détecté → évitement prioritaire (reset confirmation)
-//  2. Obstacle dans [0.10 m – 0.70 m] :
-//     - Confirmer N cycles → puis charger / virer
-//     - Sinon → orienter en douceur sans charger
-//  3. Rien → attente immobile 3 s, puis rotation 180° IMU
+//  1. Bord détecté → évitement prioritaire
+//  2. Obstacle dans [0.10 m – 0.67 m] → charge pleine puissance
+//     avec steering proportionnel (diff/180 normalisé)
+//  3. Cible perdue → se retourner vers dernière position connue (EKF)
+//  4. Rien → attente immobile 300 ms, puis rotation 180° EKF
 // ═══════════════════════════════════════════════════════════════
 
 class TrackStrategy : public StrategyInterface {
@@ -51,7 +40,6 @@ public:
         bool b  = lineB.isValid  && lineB.value.scalar  > 0.0f;
 
         if (b || fl || fr) {
-            _confirmCount = 0;
             _evadeUntil = now + EVADE_MIN_MS;
             if (b)        { _evadeCmd = AC{  SPEED_FWD,  SPEED_FWD  }; }
             else if (fl && fr) { _evadeCmd = AC{ -SPEED_FWD, -SPEED_FWD  }; }
@@ -61,7 +49,7 @@ public:
             return _evadeCmd;
         }
 
-        // ── 2. Lidar — confirmation adversaire ────────────────
+        // ── 2. Lidar — charge immédiate ───────────────────────
         SensorData lidar = ctx.getLidarData();
 
         if (lidar.isValid) {
@@ -77,44 +65,39 @@ public:
                 // Cible trouvée → reset timer de recherche
                 _searchWaitUntil = 0;
                 _spinning        = false;
-                _spinAccumDeg    = 0.0f;
 
-                // Incrémenter compteur de confirmation
-                if (_confirmCount < CONFIRM_CYCLES) ++_confirmCount;
+                // Mémoriser la position globale de l'ennemi (EKF)
+                EKF::Pose pose = ctx.getPose();
+                float offsetRad = (angle - 180.0f) * (M_PI / 180.0f);
+                _lastEnemyTheta = pose.theta + offsetRad;
+                _hasLastEnemy   = true;
 
-                // Gate TOF : si cible très proche, exiger confirmation TOF
-                bool tofOk = true;
-                if (dist < TOF_GATE_M) {
-                    SensorData tofL = ctx.getTOFData(SensorPosition::FRONT_LEFT);
-                    SensorData tofR = ctx.getTOFData(SensorPosition::FRONT_RIGHT);
-                    bool tofLok = tofL.isValid && tofL.value.scalar < TOF_MAX_MM;
-                    bool tofRok = tofR.isValid && tofR.value.scalar < TOF_MAX_MM;
-                    tofOk = tofLok || tofRok;
-                }
-
-                // Adversaire confirmé → charger
-                if (_confirmCount >= CONFIRM_CYCLES && tofOk) {
-                    ctx.setState(RobotConstants::State::ATTACK);
-                    if (fabsf(diff) <= ALIGN_DEG) {
-                        return AC{ SPEED_FWD, SPEED_FWD };
-                    }
-                    if (diff > 0.0f) return AC{ SPEED_FWD,  SPEED_TURN };
-                    return             AC{ SPEED_TURN, SPEED_FWD  };
-                }
-
-                // En cours de confirmation → s'orienter sans foncer
-                ctx.setState(RobotConstants::State::SEARCH);
-                if (fabsf(diff) <= ALIGN_DEG) return AC{ SPEED_APPROACH, SPEED_APPROACH };
-                if (diff > 0.0f)              return AC{ SPEED_APPROACH, SPEED_TURN };
-                return                               AC{ SPEED_TURN, SPEED_APPROACH };
+                // Charge pleine puissance avec steering proportionnel
+                float diffNorm = constrain(diff / 180.0f, -1.0f, 1.0f);
+                ctx.setState(RobotConstants::State::ATTACK);
+                int l = constrain((int)(SPEED_FWD * (1.0f + diffNorm)), -255, 255);
+                int r = constrain((int)(SPEED_FWD * (1.0f - diffNorm)), -255, 255);
+                return AC{ l, r };
             }
         }
 
         // ── 3. Rien → recherche intelligente ─────────────────
-        _confirmCount = 0;
         ctx.setState(RobotConstants::State::SEARCH);
 
-        // Initialiser le timer au premier cycle sans cible
+        // 3a. Mémoire ennemi — se réorienter vers dernière position connue
+        if (_hasLastEnemy) {
+            EKF::Pose pose = ctx.getPose();
+            float diff = _lastEnemyTheta - pose.theta;
+            while (diff >  M_PI) diff -= 2.0f * M_PI;
+            while (diff < -M_PI) diff += 2.0f * M_PI;
+            if (fabsf(diff) > 0.25f) {
+                return diff > 0 ? AC{ SPEED_SEARCH, -SPEED_SEARCH }
+                                : AC{ -SPEED_SEARCH, SPEED_SEARCH };
+            }
+            _hasLastEnemy = false;  // aligné → reprendre recherche normale
+        }
+
+        // 3b. Initialiser le timer au premier cycle sans cible
         if (_searchWaitUntil == 0) _searchWaitUntil = now + SEARCH_WAIT_MS;
 
         // Phase A : attente immobile (lidar scanne sans vibrations)
@@ -122,29 +105,23 @@ public:
             return AC{ 0, 0 };
         }
 
-        // Phase B : rotation 180° guidée par IMU (gx = lacet)
+        // Phase B : rotation 180° guidée par EKF theta (plus précis que IMU)
         if (_spinning) {
-            SensorData imu = ctx.getIMUData();
-            if (imu.isValid) {
-                // Intégrer gx (°/s) × dt (s) = degrés tournés
-                float dt = (now - _spinLastMs) / 1000.0f;
-                _spinLastMs   = now;
-                _spinAccumDeg += fabsf(imu.value.imu.gx) * dt;
-            }
-            if (_spinAccumDeg >= SPIN_TARGET_DEG) {
-                // 180° atteint → arrêter et lancer une nouvelle attente
+            EKF::Pose pose = ctx.getPose();
+            float turned = pose.theta - _spinStartTheta;
+            while (turned >  M_PI) turned -= 2.0f * M_PI;
+            while (turned < -M_PI) turned += 2.0f * M_PI;
+            if (fabsf(turned) >= SPIN_TARGET_RAD) {
                 _spinning        = false;
-                _spinAccumDeg    = 0.0f;
                 _searchWaitUntil = now + SEARCH_WAIT_MS;
                 return AC{ 0, 0 };
             }
-            return AC{ SPEED_SEARCH, -SPEED_SEARCH };  // tourner
+            return AC{ SPEED_SEARCH, -SPEED_SEARCH };
         }
 
-        // Attente expirée, pas encore en rotation → démarrer le spin
-        _spinning     = true;
-        _spinAccumDeg = 0.0f;
-        _spinLastMs   = now;
+        // Attente expirée → démarrer le spin, mémoriser theta de départ
+        _spinning       = true;
+        _spinStartTheta = ctx.getPose().theta;
         return AC{ SPEED_SEARCH, -SPEED_SEARCH };
     }
 
@@ -155,28 +132,22 @@ private:
     static constexpr uint32_t      EVADE_MIN_MS = 350;  // ms minimum pour quitter le bord
 
     // ── Recherche intelligente ────────────────────────────────
-    uint32_t _searchWaitUntil = 0;      // fin de la phase d'attente immobile
-    bool     _spinning        = false;  // true = rotation 180° en cours
-    float    _spinAccumDeg    = 0.0f;   // degrés accumulés depuis le début du spin
-    uint32_t _spinLastMs      = 0;      // timestamp du dernier cycle (intégration gx)
-    static constexpr uint32_t SEARCH_WAIT_MS  = 3000;  // attente immobile (ms)
-    static constexpr float    SPIN_TARGET_DEG = 170.0f; // 170° ≈ 180° (marge friction)
+    uint32_t _searchWaitUntil = 0;       // fin de la phase d'attente immobile
+    bool     _spinning        = false;   // true = rotation 180° en cours
+    float    _spinStartTheta  = 0.0f;   // theta EKF au début du spin
+    static constexpr uint32_t SEARCH_WAIT_MS  = 300;                // attente immobile (ms)
+    static constexpr float    SPIN_TARGET_RAD = 0.95f * M_PI;       // ~171° en radians
 
-    // ── Confirmation adversaire ───────────────────────────────
-    int _confirmCount = 0;
-    static constexpr int   CONFIRM_CYCLES = 3;      // 3 × 50 ms = 150 ms
-    static constexpr float TOF_GATE_M     = 0.35f;  // en dessous, exiger TOF
-    static constexpr float TOF_MAX_MM     = 400.0f; // TOF valide si < 400 mm
+    // ── Mémoire dernière position ennemi ─────────────────────
+    bool  _hasLastEnemy    = false;
+    float _lastEnemyTheta  = 0.0f;  // angle global (rad, EKF) de la dernière détection
 
     // ── Distances ─────────────────────────────────────────────
     static constexpr float MIN_DIST_M  = 0.10f;  // 100 mm
-    static constexpr float MAX_DIST_M  = 0.70f;  // 700 mm
-    static constexpr float ALIGN_DEG   = 20.0f;  // tolérance alignement
+    static constexpr float MAX_DIST_M  = 0.67f;  // 670 mm
 
     // ── Vitesses ──────────────────────────────────────────────
-    static constexpr int SPEED_FWD      = 255;  // charge confirmée
-    static constexpr int SPEED_APPROACH = 120;  // approche pendant confirmation
-    static constexpr int SPEED_TURN     =  80;  // roue intérieure virage
-    static constexpr int SPEED_SLOW     = 100;  // évitement latéral
-    static constexpr int SPEED_SEARCH   =  80;  // rotation surveillance
+    static constexpr int SPEED_FWD    = 255;  // charge pleine puissance
+    static constexpr int SPEED_SLOW   = 100;  // évitement latéral
+    static constexpr int SPEED_SEARCH =  80;  // rotation surveillance
 };

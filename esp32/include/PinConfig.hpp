@@ -48,10 +48,11 @@ namespace RobotConfig {
     
     // --- Encodeurs Moteurs (Entrées numériques rapides) ---
     // Déplacés sur des pins "safe" pour éviter les erreurs de boot
-    constexpr uint8_t ENCODER_MOTOR_LEFT_P = 18;
-    constexpr uint8_t ENCODER_MOTOR_LEFT_H = 19;
-    constexpr uint8_t ENCODER_MOTOR_RIGHT_P = 4;
-    constexpr uint8_t ENCODER_MOTOR_RIGHT_H = 5;
+    // NOTE: câblage physique inversé — pins 4/5 = encodeur gauche, 18/19 = encodeur droit
+    constexpr uint8_t ENCODER_MOTOR_LEFT_P = 4;
+    constexpr uint8_t ENCODER_MOTOR_LEFT_H = 5;
+    constexpr uint8_t ENCODER_MOTOR_RIGHT_P = 18;
+    constexpr uint8_t ENCODER_MOTOR_RIGHT_H = 19;
  
     // --- Commande Freinage BJT ---
     // Pin de sortie defaut drb8833 

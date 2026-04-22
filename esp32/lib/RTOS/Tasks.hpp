@@ -22,8 +22,9 @@ struct EKFParams {
     DriverManager*  driver;
     PID*            pidLeft;
     PID*            pidRight;
-    volatile int    lastPwmLeft  = 0;  // debug — dernière sortie PID gauche
-    volatile int    lastPwmRight = 0;  // debug — dernière sortie PID droit
+    PID*            pidYaw;          // correcteur de cap — consigne 0 deg/s
+    volatile int    lastPwmLeft  = 0;
+    volatile int    lastPwmRight = 0;
 };
 
 // ───────────────────────────────────────────────────────────────
@@ -368,7 +369,11 @@ void taskComm(void* pvParameters)
 // ───────────────────────────────────────────────────────────────
 void taskEncoders(void* pvParameters)
 {
-    static constexpr float SPEED_MAX_RPM = 160.0f; // vitesse maxi mesurée ~130 RPM à 200/255 PWM
+    // Vitesses maxi par roue (mesurées à PWM=255, batterie pleine)
+    static constexpr float SPEED_MAX_RPM_L = 105.0f;  // roue gauche, gear 100:1
+    static constexpr float SPEED_MAX_RPM_R = 192.0f;  // roue droite, gear ~54.7:1 (test physique: 13.7/7.5 × 105)
+    // ↑ Si robot tourne encore à droite après flash → diminuer SPEED_MAX_RPM_R (ex: 185, 180...)
+    // ↑ Si robot tourne à gauche → augmenter SPEED_MAX_RPM_R (ex: 200, 205...)
 
     EKFParams* p = static_cast<EKFParams*>(pvParameters);
 
@@ -380,8 +385,8 @@ void taskEncoders(void* pvParameters)
         const float deltaMs = RTOSConfig::PERIOD_ENCODER * portTICK_PERIOD_MS;
 
         // 1. Lire et remettre à zéro atomiquement (une seule fois)
-        int32_t pulsesLeft  =  p->left->getAndReset();
-        int32_t pulsesRight = -p->right->getAndReset();  // encodeur droit câblé inversé
+        int32_t pulsesLeft  = -p->left->getAndReset();   // encodeur gauche câblé inversé
+        int32_t pulsesRight =  p->right->getAndReset();
 
         // 2. Calculer RPM et publier dans RobotContext
         RobotContext::EncoderData left, right;
@@ -398,8 +403,8 @@ void taskEncoders(void* pvParameters)
         ctx.setEncoderData(SensorPosition::LEFT,  left);
         ctx.setEncoderData(SensorPosition::RIGHT, right);
 
-        // 3. Prédiction EKF odométrie
-        p->ekf->predict(pulsesLeft, pulsesRight);
+        // 3. Prédiction EKF odométrie — conversion pulses → mm par roue (PPR différents)
+        p->ekf->predict(p->left->toMM(pulsesLeft), p->right->toMM(pulsesRight));
 
         // 4. Correction EKF gyroscope
         SensorData imuData = ctx.getIMUData();
@@ -429,20 +434,41 @@ void taskEncoders(void* pvParameters)
             p->pidLeft->reset();
             p->pidRight->reset();
         } else {
-            float targetL = (cmd.leftSpeed  / 255.0f) * SPEED_MAX_RPM;
-            float targetR = (cmd.rightSpeed / 255.0f) * SPEED_MAX_RPM;
+            // Cible identique en RPM roue pour les deux moteurs
+            float targetL = (cmd.leftSpeed  / 255.0f) * SPEED_MAX_RPM_L;
+            float targetR = (cmd.rightSpeed / 255.0f) * SPEED_MAX_RPM_L;
 
             p->pidLeft->setSetpoint(targetL);
             p->pidRight->setSetpoint(targetR);
 
-            int pwmL = cmd.leftSpeed  + (int)p->pidLeft->compute(left.rpm);
-            int pwmR = cmd.rightSpeed + (int)p->pidRight->compute(right.rpm);
-            pwmL = constrain(pwmL, -255, 255);
-            pwmR = constrain(pwmR, -255, 255);
+            // Feedforward pré-échelonné : R a besoin de moins de PWM pour la même vitesse roue
+            static constexpr float FF_SCALE_R = SPEED_MAX_RPM_L / SPEED_MAX_RPM_R; // ~0.5
+            int ffL = cmd.leftSpeed;
+            int ffR = (int)roundf(cmd.rightSpeed * FF_SCALE_R);
 
-            p->lastPwmLeft  = pwmL;
-            p->lastPwmRight = pwmR;
-            p->driver->setSpeedAll(pwmL, pwmR);
+            int pwmL = ffL + (int)p->pidLeft->compute(left.rpm);
+            int pwmR = ffR + (int)p->pidRight->compute(right.rpm);
+
+            // Correction de cap — uniquement en ligne droite (L == R, même signe)
+            // Consigne pidYaw = 0 deg/s : si gx != 0, le robot tourne → corriger
+            if (cmd.leftSpeed == cmd.rightSpeed && imuData.isValid) {
+                float gx = imuData.value.imu.gx;
+                // Zone morte ±3 deg/s : ignore le biais résiduel et le bruit de vibration
+                static constexpr float YAW_DEADBAND = 3.0f;
+                if (fabsf(gx) > YAW_DEADBAND) {
+                    float corr = p->pidYaw->compute(gx);
+                    pwmL -= (int)corr;
+                    pwmR += (int)corr;
+                } else {
+                    p->pidYaw->reset();
+                }
+            } else {
+                p->pidYaw->reset();  // ne pas accumuler l'intégrale en virage
+            }
+
+            p->lastPwmLeft  = constrain(pwmL, -255, 255);
+            p->lastPwmRight = constrain(pwmR, -255, 255);
+            p->driver->setSpeedAll(p->lastPwmLeft, p->lastPwmRight);
         }
 
         vTaskDelayUntil(&lastWake, RTOSConfig::PERIOD_ENCODER);

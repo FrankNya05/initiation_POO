@@ -46,12 +46,9 @@ public:
 
     // ── Prédiction — odométrie encodeurs ─────────────────────
     //  Appeler à chaque cycle taskEncoders (200 Hz)
-    //  @param pulsesLeft   impulsions encodeur gauche (signées, remises à 0 après)
-    //  @param pulsesRight  impulsions encodeur droit  (signées, remises à 0 après)
-    void predict(int32_t pulsesLeft, int32_t pulsesRight) {
-
-        const float dl     = pulsesLeft  * MM_PER_PULSE;
-        const float dr     = pulsesRight * MM_PER_PULSE;
+    //  @param dl  distance roue gauche en mm (signée)
+    //  @param dr  distance roue droite en mm (signée)
+    void predict(float dl, float dr) {
         const float d      = (dl + dr) * 0.5f;
         const float dTheta = (dr - dl) / WHEELBASE;
         const float midTheta = _theta + dTheta * 0.5f;
@@ -134,10 +131,7 @@ private:
     float _qTheta = 0.1f;   // bruit processus cap       (rad²/rad tourné)
     float _rIMU   = 0.01f;  // bruit mesure gyroscope    (rad²)
 
-    static constexpr float WHEEL_DIAMETER = RobotConstants::WHEEL_DIAMETER_MM;
-    static constexpr float WHEELBASE      = RobotConstants::WHEELBASE_MM;
-    static constexpr float PULSES_PER_REV = static_cast<float>(RobotConstants::PULSES_PER_REV);
-    static constexpr float MM_PER_PULSE   = (3.14159f * WHEEL_DIAMETER) / PULSES_PER_REV;
+    static constexpr float WHEELBASE = RobotConstants::WHEELBASE_MM;
 
     static float _wrapAngle(float a) {
         while (a >  3.14159f) a -= 2.0f * 3.14159f;

@@ -7,6 +7,7 @@ class Encoder {
 private:
     uint8_t  _pinA;
     uint8_t  _pinB;
+    int      _pulsesPerRev;
     volatile int32_t _count      = 0;  // compteur relatif (remis à 0 sur demande)
     volatile int32_t _totalCount = 0;  // position absolue (jamais remise à 0)
     volatile int8_t  _lastA      = 0;
@@ -31,8 +32,8 @@ private:
     }
 
 public:
-    Encoder(uint8_t pinA, uint8_t pinB)
-        : _pinA(pinA), _pinB(pinB) {}
+    Encoder(uint8_t pinA, uint8_t pinB, int pulsesPerRev = RobotConstants::PULSES_PER_REV)
+        : _pinA(pinA), _pinB(pinB), _pulsesPerRev(pulsesPerRev) {}
 
     void init(bool isLeft) {
         pinMode(_pinA, INPUT_PULLUP);
@@ -63,10 +64,14 @@ public:
     int32_t getTotalCount() const { return _totalCount; }
     void    reset()               { _count = 0; }
 
-    // Conversion pulses → RPM
+    // Conversion pulses → RPM roue (utilise le PPR de cette instance)
     float getRPM(int32_t pulses, float deltaMs) {
-        return (pulses / (float)RobotConstants::PULSES_PER_REV)
-               * (60000.0f / deltaMs);
+        return (pulses / (float)_pulsesPerRev) * (60000.0f / deltaMs);
+    }
+
+    // Distance parcourue par la roue en mm pour un nombre de pulses
+    float toMM(int32_t pulses) const {
+        return pulses * (3.14159f * RobotConstants::WHEEL_DIAMETER_MM / _pulsesPerRev);
     }
 
     // ── Position angulaire absolue (depuis démarrage) ──────────
