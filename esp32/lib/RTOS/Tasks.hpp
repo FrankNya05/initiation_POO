@@ -484,9 +484,12 @@ struct CommandTaskParams {
     // Callbacks vers main.cpp (résolution des dépendances locales)
     void (*onStrategy)(const char* name);       // STRATEGY:xxx
     void (*onLed)(uint8_t r, uint8_t g, uint8_t b); // LED:R:G:B
-    void (*onPidKp)(float v);                   // PID:KP
+    void (*onPidKp)(float v);                   // PID:KP     (moteurs gauche+droit)
     void (*onPidKi)(float v);                   // PID:KI
     void (*onPidKd)(float v);                   // PID:KD
+    void (*onPidYawKp)(float v);               // PID:YAW:KP (correcteur de cap)
+    void (*onPidYawKi)(float v);               // PID:YAW:KI
+    void (*onPidYawKd)(float v);               // PID:YAW:KD
     void (*onPoseReset)();                       // POSE:RESET / RESET
 };
 
@@ -560,6 +563,21 @@ void taskCommand(void* pvParameters)
             case CommandType::PID_KD:
                 LOGF("[CMD] PID KD = %.3f\n", cmd.pidValue);
                 if (p->onPidKd) p->onPidKd(cmd.pidValue);
+                break;
+
+            case CommandType::PID_YAW_KP:
+                LOGF("[CMD] PID YAW KP = %.3f\n", cmd.pidValue);
+                if (p->onPidYawKp) p->onPidYawKp(cmd.pidValue);
+                break;
+
+            case CommandType::PID_YAW_KI:
+                LOGF("[CMD] PID YAW KI = %.3f\n", cmd.pidValue);
+                if (p->onPidYawKi) p->onPidYawKi(cmd.pidValue);
+                break;
+
+            case CommandType::PID_YAW_KD:
+                LOGF("[CMD] PID YAW KD = %.3f\n", cmd.pidValue);
+                if (p->onPidYawKd) p->onPidYawKd(cmd.pidValue);
                 break;
 
             case CommandType::LED:
