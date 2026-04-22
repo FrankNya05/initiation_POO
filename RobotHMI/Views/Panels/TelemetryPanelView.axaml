@@ -28,12 +28,15 @@
     <Grid ColumnDefinitions="340,12,*" Margin="12">
 
         <!-- ═════════════════════════════════════════════════════════════
-             COLONNE GAUCHE : Batterie + Capteurs de ligne
+             COLONNE GAUCHE : Batterie + Capteurs de ligne + TOF + Moteurs
              ═════════════════════════════════════════════════════════════ -->
-        <Grid Grid.Column="0" RowDefinitions="Auto,12,*">
+        <ScrollViewer Grid.Column="0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12">
 
             <!-- ── BATTERIE ───────────────────────────────────────────── -->
-            <Border Grid.Row="0" Classes="card">
+            <Border Classes="card">
                 <StackPanel Spacing="8">
                     <TextBlock Classes="section-title" Text="BATTERIE"/>
                     <Separator/>
@@ -67,7 +70,7 @@
             </Border>
 
             <!-- ── CAPTEURS DE LIGNE ──────────────────────────────────── -->
-            <Border Grid.Row="2" Classes="card">
+            <Border Classes="card">
                 <StackPanel Spacing="8">
                     <TextBlock Classes="section-title" Text="CAPTEURS DE LIGNE"/>
                     <Separator/>
@@ -162,7 +165,73 @@
                 </StackPanel>
             </Border>
 
-        </Grid>
+            <!-- ── TOF (MODIFIÉ V2.1) ────────────────────────────────── -->
+            <!-- Section TOF : valeur en mm. Affiche trois tirets si donnees absentes -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="section-title" Text="TOF"/>
+                    <Separator/>
+
+                    <Grid ColumnDefinitions="*,8,*">
+
+                        <!-- TOF avant-gauche -->
+                        <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                            <TextBlock Classes="label" FontSize="11"
+                                       Text="Avant-G" HorizontalAlignment="Center"/>
+                            <TextBlock Classes="value-mono" FontSize="18"
+                                       Foreground="#00D4FF" HorizontalAlignment="Center"
+                                       Text="{Binding TofFrontLeftText}"/>
+                        </StackPanel>
+
+                        <!-- Séparateur vertical -->
+                        <Rectangle Grid.Column="1" Width="1"
+                                   Fill="#2A3F55" VerticalAlignment="Stretch"/>
+
+                        <!-- TOF avant-droit -->
+                        <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                            <TextBlock Classes="label" FontSize="11"
+                                       Text="Avant-D" HorizontalAlignment="Center"/>
+                            <TextBlock Classes="value-mono" FontSize="18"
+                                       Foreground="#00D4FF" HorizontalAlignment="Center"
+                                       Text="{Binding TofFrontRightText}"/>
+                        </StackPanel>
+
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Section moteurs PWM actuel -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="section-title" Text="MOTEURS (PWM)"/>
+                    <Separator/>
+                    <Grid ColumnDefinitions="*,8,*">
+
+                        <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                            <TextBlock Classes="label" FontSize="11"
+                                       Text="Gauche" HorizontalAlignment="Center"/>
+                            <TextBlock Classes="value-mono" FontSize="18"
+                                       Foreground="#00E676" HorizontalAlignment="Center"
+                                       Text="{Binding MotorLeftText}"/>
+                        </StackPanel>
+
+                        <Rectangle Grid.Column="1" Width="1"
+                                   Fill="#2A3F55" VerticalAlignment="Stretch"/>
+
+                        <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                            <TextBlock Classes="label" FontSize="11"
+                                       Text="Droit" HorizontalAlignment="Center"/>
+                            <TextBlock Classes="value-mono" FontSize="18"
+                                       Foreground="#00E676" HorizontalAlignment="Center"
+                                       Text="{Binding MotorRightText}"/>
+                        </StackPanel>
+
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+        </ScrollViewer>
 
         <!-- ═════════════════════════════════════════════════════════════
              COLONNE DROITE : Radar lidar rectangulaire

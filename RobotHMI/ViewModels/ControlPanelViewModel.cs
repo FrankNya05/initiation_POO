@@ -30,6 +30,9 @@ public class ControlPanelViewModel : ViewModelBase
         StrategyAdamantineCommand = new AsyncRelayCommand(() => OnStrategyAsync("ADAMANTINE"));
         StrategyBerserkerCommand  = new AsyncRelayCommand(() => OnStrategyAsync("BERSERKER"));
         StrategyCircleCommand     = new AsyncRelayCommand(() => OnStrategyAsync("CIRCLE"));
+        StrategyTrackCommand      = new AsyncRelayCommand(() => OnStrategyAsync("Track"));  // MODIFIÉ V2.3
+
+        SendLedCommand = new AsyncRelayCommand(OnSendLedAsync);  // LED RGB
     }
 
     // -----------------------------------------------------------------------
@@ -56,6 +59,7 @@ public class ControlPanelViewModel : ViewModelBase
     public ICommand StrategyAdamantineCommand { get; }
     public ICommand StrategyBerserkerCommand  { get; }
     public ICommand StrategyCircleCommand     { get; }
+    public ICommand StrategyTrackCommand      { get; }  // MODIFIÉ V2.3
 
     private string _activeStrategy = string.Empty;
 
@@ -69,6 +73,7 @@ public class ControlPanelViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsAdamantineActive));
                 OnPropertyChanged(nameof(IsBerserkerActive));
                 OnPropertyChanged(nameof(IsCircleActive));
+                OnPropertyChanged(nameof(IsTrackActive));  // MODIFIÉ V2.3
             }
         }
     }
@@ -76,6 +81,7 @@ public class ControlPanelViewModel : ViewModelBase
     public bool IsAdamantineActive => ActiveStrategy == "ADAMANTINE";
     public bool IsBerserkerActive  => ActiveStrategy == "BERSERKER";
     public bool IsCircleActive     => ActiveStrategy == "CIRCLE";
+    public bool IsTrackActive      => ActiveStrategy == "Track";   // MODIFIÉ V2.3
 
     private async Task OnStrategyAsync(string strategyName)
         => await SendSafe(
@@ -137,5 +143,59 @@ public class ControlPanelViewModel : ViewModelBase
     {
         get => _lastCommandText;
         private set => SetField(ref _lastCommandText, value);
+    }
+
+    // -----------------------------------------------------------------------
+    // LED RGB
+    // -----------------------------------------------------------------------
+
+    public ICommand SendLedCommand { get; }
+
+    private int _ledR = 0;
+    private int _ledG = 0;
+    private int _ledB = 0;
+
+    public int LedR
+    {
+        get => _ledR;
+        set { if (SetField(ref _ledR, (int)Math.Clamp(value, 0, 255))) UpdateLedPreview(); }
+    }
+
+    public int LedG
+    {
+        get => _ledG;
+        set { if (SetField(ref _ledG, (int)Math.Clamp(value, 0, 255))) UpdateLedPreview(); }
+    }
+
+    public int LedB
+    {
+        get => _ledB;
+        set { if (SetField(ref _ledB, (int)Math.Clamp(value, 0, 255))) UpdateLedPreview(); }
+    }
+
+    /// <summary>Couleur hex pour la prévisualisation — ex: "#FF0000".</summary>
+    private string _ledColorPreview = "#000000";
+    public string LedColorPreview
+    {
+        get => _ledColorPreview;
+        private set => SetField(ref _ledColorPreview, value);
+    }
+
+    /// <summary>Texte affiché sous les sliders — ex: "R:255 G:0 B:0".</summary>
+    public string LedColorText => $"R:{_ledR}  G:{_ledG}  B:{_ledB}";
+
+    private void UpdateLedPreview()
+    {
+        LedColorPreview = $"#{_ledR:X2}{_ledG:X2}{_ledB:X2}";
+        OnPropertyChanged(nameof(LedColorText));
+    }
+
+    private async Task OnSendLedAsync()
+    {
+        // CommandSerializer.SerializeRobotCommand ne convient pas ici —
+        // on construit la commande LED directement selon le format du firmware :
+        // LED:R:<v>:G:<v>:B:<v>
+        var cmd = $"LED:R:{_ledR}:G:{_ledG}:B:{_ledB}";
+        await SendSafe(cmd, $"Envoyé : {cmd}");
     }
 }

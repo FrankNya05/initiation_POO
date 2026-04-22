@@ -48,3 +48,6 @@ build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
 [C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/TelemetryPanelView.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/TuningPanelView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml

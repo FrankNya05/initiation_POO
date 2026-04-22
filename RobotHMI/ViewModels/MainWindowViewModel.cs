@@ -45,16 +45,15 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>MODIFIÉ V2 — ViewModel de l'onglet logs.</summary>
     public LogPanelViewModel LogPanel { get; }              // MODIFIÉ V2
 
+    /// <summary>NOUVEAU V2.1 — ViewModel de l'onglet réglages PID.</summary>
+    public TuningPanelViewModel TuningPanel { get; }        // MODIFIÉ V2.1
+
     // -----------------------------------------------------------------------
     // Navigation par onglets — MODIFIÉ V2
     // -----------------------------------------------------------------------
 
-    private int _selectedTabIndex = 0;  // Onglet CONTRÔLE par défaut
+    private int _selectedTabIndex = 0;
 
-    /// <summary>
-    /// MODIFIÉ V2 — Index de l'onglet actif.
-    /// 0 = CONTRÔLE, 1 = TÉLÉMÉTRIE, 2 = MOTEURS, 3 = LOGS
-    /// </summary>
     public int SelectedTabIndex
     {
         get => _selectedTabIndex;
@@ -76,6 +75,9 @@ public class MainWindowViewModel : ViewModelBase
         // ── Nouveaux VMs V2 ──────────────────────────────────────────────
         MotorTestPanel = new MotorTestPanelViewModel(commService);  // MODIFIÉ V2
         LogPanel       = new LogPanelViewModel();                   // MODIFIÉ V2
+
+        // ── Nouveau V2.1 ─────────────────────────────────────────────────
+        TuningPanel = new TuningPanelViewModel(commService);       // MODIFIÉ V2.1
 
         // ── Forwarding de la connexion ───────────────────────────────────
         // Quand ConnectionPanel.IsConnected change, propager aux VMs qui en ont besoin.

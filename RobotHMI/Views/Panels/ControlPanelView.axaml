@@ -5,10 +5,6 @@
              x:DataType="vm:ControlPanelViewModel"
              Background="#0F1923">
 
-    <!-- MODIFIÉ V2 — Onglet CONTRÔLE : Match + Stratégie -->
-    <!-- Aucune classe conditionnelle complexe — surbrillance stratégie via
-         deux Border superposés avec IsVisible sur le bool. -->
-
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="16" Spacing="16">
 
@@ -21,48 +17,26 @@
                     <TextBlock Classes="section-title" Text="MATCH"/>
                     <Separator/>
 
-                    <!-- Boutons START / STOP côte à côte -->
                     <Grid ColumnDefinitions="*,16,*">
 
                         <Button Grid.Column="0"
                                 Classes="start-btn"
                                 Command="{Binding StartCommand}"
-                                HorizontalAlignment="Stretch">
-                            <StackPanel Orientation="Vertical"
-                                        HorizontalAlignment="Center"
-                                        Spacing="4">
-                                <TextBlock Text="▶" FontSize="24"
-                                           HorizontalAlignment="Center"/>
-                                <TextBlock Text="START" FontSize="16"
-                                           FontWeight="Bold"
-                                           HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
+                                HorizontalAlignment="Stretch"
+                                Content="START"/>
 
                         <Button Grid.Column="2"
                                 Classes="stop-btn"
                                 Command="{Binding StopCommand}"
-                                HorizontalAlignment="Stretch">
-                            <StackPanel Orientation="Vertical"
-                                        HorizontalAlignment="Center"
-                                        Spacing="4">
-                                <TextBlock Text="⏹" FontSize="24"
-                                           HorizontalAlignment="Center"/>
-                                <TextBlock Text="STOP" FontSize="16"
-                                           FontWeight="Bold"
-                                           HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-
+                                HorizontalAlignment="Stretch"
+                                Content="STOP"/>
                     </Grid>
 
-                    <!-- Bouton RESET -->
                     <Button Classes="reset-btn"
                             Command="{Binding ResetCommand}"
                             HorizontalAlignment="Stretch"
-                            Content="↺  RESET"/>
+                            Content="RESET"/>
 
-                    <!-- Dernier retour -->
                     <TextBlock Text="{Binding LastCommandText}"
                                Foreground="#78909C"
                                FontSize="12"
@@ -85,10 +59,7 @@
                                Text="Sélectionner la stratégie active avant le match :"
                                TextWrapping="Wrap"/>
 
-                    <!-- 3 boutons de stratégie -->
-                    <!-- Surbrillance : chaque bouton contient deux couches
-                         (active = cyan, inactive = gris) via IsVisible. -->
-                    <Grid ColumnDefinitions="*,8,*,8,*">
+                    <Grid ColumnDefinitions="*,8,*,8,*,8,*">
 
                         <!-- ADAMANTINE -->
                         <Button Grid.Column="0"
@@ -102,27 +73,17 @@
                                     <Setter Property="BorderThickness" Value="1"/>
                                 </Style>
                             </Button.Styles>
-                            <!-- Couche active — visible si IsAdamantineActive -->
                             <Panel>
-                                <StackPanel IsVisible="{Binding IsAdamantineActive}"
-                                            HorizontalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="🛡" FontSize="18"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#0F1923"/>
-                                    <TextBlock Text="ADAMANTINE" FontSize="11"
-                                               FontWeight="Bold"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#0F1923"/>
-                                </StackPanel>
-                                <StackPanel IsVisible="{Binding !IsAdamantineActive}"
-                                            HorizontalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="🛡" FontSize="18"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#78909C"/>
-                                    <TextBlock Text="ADAMANTINE" FontSize="11"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#78909C"/>
-                                </StackPanel>
+                                <TextBlock IsVisible="{Binding IsAdamantineActive}"
+                                           Text="ADAMANTINE" FontSize="13"
+                                           FontWeight="Bold" Foreground="#0F1923"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock IsVisible="{Binding !IsAdamantineActive}"
+                                           Text="ADAMANTINE" FontSize="13"
+                                           Foreground="#78909C"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
                             </Panel>
                         </Button>
 
@@ -139,25 +100,16 @@
                                 </Style>
                             </Button.Styles>
                             <Panel>
-                                <StackPanel IsVisible="{Binding IsBerserkerActive}"
-                                            HorizontalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="⚡" FontSize="18"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#0F1923"/>
-                                    <TextBlock Text="BERSERKER" FontSize="11"
-                                               FontWeight="Bold"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#0F1923"/>
-                                </StackPanel>
-                                <StackPanel IsVisible="{Binding !IsBerserkerActive}"
-                                            HorizontalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="⚡" FontSize="18"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#78909C"/>
-                                    <TextBlock Text="BERSERKER" FontSize="11"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#78909C"/>
-                                </StackPanel>
+                                <TextBlock IsVisible="{Binding IsBerserkerActive}"
+                                           Text="BERSERKER" FontSize="13"
+                                           FontWeight="Bold" Foreground="#0F1923"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock IsVisible="{Binding !IsBerserkerActive}"
+                                           Text="BERSERKER" FontSize="13"
+                                           Foreground="#78909C"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
                             </Panel>
                         </Button>
 
@@ -174,37 +126,145 @@
                                 </Style>
                             </Button.Styles>
                             <Panel>
-                                <StackPanel IsVisible="{Binding IsCircleActive}"
-                                            HorizontalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="🔄" FontSize="18"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#0F1923"/>
-                                    <TextBlock Text="CIRCLE" FontSize="11"
-                                               FontWeight="Bold"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#0F1923"/>
-                                </StackPanel>
-                                <StackPanel IsVisible="{Binding !IsCircleActive}"
-                                            HorizontalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="🔄" FontSize="18"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#78909C"/>
-                                    <TextBlock Text="CIRCLE" FontSize="11"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#78909C"/>
-                                </StackPanel>
+                                <TextBlock IsVisible="{Binding IsCircleActive}"
+                                           Text="CIRCLE" FontSize="13"
+                                           FontWeight="Bold" Foreground="#0F1923"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock IsVisible="{Binding !IsCircleActive}"
+                                           Text="CIRCLE" FontSize="13"
+                                           Foreground="#78909C"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Panel>
+                        </Button>
+
+                        <!-- TRACK (MODIFIE V2.3) -->
+                        <Button Grid.Column="6"
+                                Command="{Binding StrategyTrackCommand}"
+                                HorizontalAlignment="Stretch"
+                                MinHeight="60">
+                            <Button.Styles>
+                                <Style Selector="Button">
+                                    <Setter Property="Background" Value="#1C2B3A"/>
+                                    <Setter Property="BorderBrush" Value="#2A3F55"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                </Style>
+                            </Button.Styles>
+                            <Panel>
+                                <TextBlock IsVisible="{Binding IsTrackActive}"
+                                           Text="TRACK" FontSize="13"
+                                           FontWeight="Bold" Foreground="#0F1923"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock IsVisible="{Binding !IsTrackActive}"
+                                           Text="TRACK" FontSize="13"
+                                           Foreground="#78909C"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
                             </Panel>
                         </Button>
 
                     </Grid>
 
-                    <!-- Stratégie active -->
                     <TextBlock HorizontalAlignment="Center"
-                               Foreground="#00D4FF"
-                               FontSize="12"
+                               Foreground="#00D4FF" FontSize="12"
                                Text="{Binding ActiveStrategy,
                                       StringFormat='Stratégie active : {0}',
                                       FallbackValue='Stratégie active : Aucune'}"/>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 SECTION LED RGB
+                 Commande envoyée : LED:R:<v>:G:<v>:B:<v>
+                 ═══════════════════════════════════════════════════════════ -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+
+                    <TextBlock Classes="section-title" Text="LED RGB"/>
+                    <Separator/>
+
+                    <!-- Sliders R G B -->
+                    <Grid RowDefinitions="Auto,8,Auto,8,Auto"
+                          ColumnDefinitions="20,*,12,50">
+
+                        <!-- R -->
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Text="R" FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="14" FontWeight="Bold"
+                                   Foreground="#FF1744" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="0" Grid.Column="1"
+                                Minimum="0" Maximum="255"
+                                Value="{Binding LedR}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="3"
+                                   Text="{Binding LedR}"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="13" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- G -->
+                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                   Text="G" FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="14" FontWeight="Bold"
+                                   Foreground="#00E676" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="2" Grid.Column="1"
+                                Minimum="0" Maximum="255"
+                                Value="{Binding LedG}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="2" Grid.Column="3"
+                                   Text="{Binding LedG}"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="13" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- B -->
+                        <TextBlock Grid.Row="4" Grid.Column="0"
+                                   Text="B" FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="14" FontWeight="Bold"
+                                   Foreground="#00D4FF" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="4" Grid.Column="1"
+                                Minimum="0" Maximum="255"
+                                Value="{Binding LedB}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="4" Grid.Column="3"
+                                   Text="{Binding LedB}"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="13" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+
+                    </Grid>
+
+                    <!-- Prévisualisation couleur + bouton Envoyer -->
+                    <Grid ColumnDefinitions="50,*,12,120">
+
+                        <!-- Aperçu de la couleur sélectionnée -->
+                        <Border Grid.Column="0"
+                                Width="40" Height="40"
+                                CornerRadius="6"
+                                Background="{Binding LedColorPreview}"
+                                BorderBrush="#2A3F55"
+                                BorderThickness="1"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding LedColorText}"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="13" Foreground="#78909C"
+                                   VerticalAlignment="Center"/>
+
+                        <Button Grid.Column="3"
+                                Command="{Binding SendLedCommand}"
+                                Background="#2A3F55"
+                                Foreground="#E0E0E0"
+                                FontWeight="Bold"
+                                MinHeight="44"
+                                HorizontalAlignment="Stretch"
+                                Content="Envoyer"/>
+                    </Grid>
 
                 </StackPanel>
             </Border>
