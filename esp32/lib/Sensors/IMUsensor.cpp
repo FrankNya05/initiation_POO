@@ -24,6 +24,7 @@ IMUSensor::IMUSensor(SensorPosition pos) {
 bool IMUSensor::init() {
     // Tente de démarrer la communication I2C avec le MPU6050.
     // begin() retourne false si le capteur ne répond pas.
+   // Wire.begin(21,22);
     if (!_mpu.begin()) {
         Serial.println("[IMUSensor] MPU6050 introuvable sur le bus I2C.");
         return false;

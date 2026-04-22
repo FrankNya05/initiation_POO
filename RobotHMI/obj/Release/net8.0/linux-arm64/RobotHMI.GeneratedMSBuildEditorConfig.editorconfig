@@ -31,6 +31,18 @@ build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 [C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/ControlPanelView.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
+[C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/LogPanelView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/MotorTestPanelView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/StatusBarBottomView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/StatusBarTopView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
 [C:/GEI_1076_Labs/initiation_POO/RobotHMI/Views/Panels/StatusBarView.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
