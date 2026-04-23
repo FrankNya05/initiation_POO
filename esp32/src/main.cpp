@@ -53,7 +53,6 @@ PID pidYaw  (0.5f, 0.0f, 0.0f);  // kp=0.5 → ~0.5 PWM par deg/s d'écart (augm
 EKFParams ekfParams { &ekf, &encLeft, &encRight, &driverManager, &pidLeft, &pidRight, &pidYaw };
 
 static float g_pidKp = 0.5f, g_pidKi = 0.1f, g_pidKd = 0.0f;
-static float g_pidYawKp = 0.5f, g_pidYawKi = 0.0f, g_pidYawKd = 0.0f;
 
 LidarSensor          lidar;
 CommunicationManager comm;
@@ -77,9 +76,20 @@ static void onPidKd(float v) {
     pidLeft.setGains(g_pidKp, g_pidKi, g_pidKd);
     pidRight.setGains(g_pidKp, g_pidKi, g_pidKd);
 }
-static void onPidYawKp(float v) { g_pidYawKp = v; pidYaw.setGains(g_pidYawKp, g_pidYawKi, g_pidYawKd); }
-static void onPidYawKi(float v) { g_pidYawKi = v; pidYaw.setGains(g_pidYawKp, g_pidYawKi, g_pidYawKd); }
-static void onPidYawKd(float v) { g_pidYawKd = v; pidYaw.setGains(g_pidYawKp, g_pidYawKi, g_pidYawKd); }
+
+static float g_pidYawKp = 0.5f, g_pidYawKi = 0.0f, g_pidYawKd = 0.0f;
+static void onPidYawKp(float v) {
+    g_pidYawKp = v;
+    pidYaw.setGains(g_pidYawKp, g_pidYawKi, g_pidYawKd);
+}
+static void onPidYawKi(float v) {
+    g_pidYawKi = v;
+    pidYaw.setGains(g_pidYawKp, g_pidYawKi, g_pidYawKd);
+}
+static void onPidYawKd(float v) {
+    g_pidYawKd = v;
+    pidYaw.setGains(g_pidYawKp, g_pidYawKi, g_pidYawKd);
+}
 
 CommandTaskParams cmdParams {
     &stratManager,

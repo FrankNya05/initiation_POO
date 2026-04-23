@@ -3,16 +3,19 @@
 #include "RobotContext.hpp"
 
 // ═══════════════════════════════════════════════════════════════
-//  TrackStrategy — Fonce vers tout obstacle entre 100 mm et 670 mm
+//  TrackStrategy — Charge vers tout obstacle détecté par le lidar
 //
-//  Lidar donne angle en degrés (0° = arrière robot, 180° = avant).
+//  Priorités (décroissantes) :
+//  1. ÉVADE   : bord → 2 phases :
+//                 Phase 1 (EVADE_BACKUP_MS) : recul (temps)
+//                 Phase 2 (EVADE_PIVOT_ANGLE EKF) : pivot 90°
+//               + grace period EVADE_GRACE_MS post-pivot
+//               → mémoire ennemi effacée à chaque EVADE
+//  2. ATTACK  : lidar [100–670 mm] → charge pleine avec steering
+//  3. MEMORY  : lidar perdu → se réorienter vers dernier θ connu
+//  4. SEARCH  : rien → rotation rapide continue (EKF demi-tour)
 //
-//  Logique :
-//  1. Bord détecté → évitement prioritaire
-//  2. Obstacle dans [0.10 m – 0.67 m] → charge pleine puissance
-//     avec steering proportionnel (diff/180 normalisé)
-//  3. Cible perdue → se retourner vers dernière position connue (EKF)
-//  4. Rien → attente immobile 300 ms, puis rotation 180° EKF
+//  Toutes les consignes de rotation s'appuient sur EKF θ.
 // ═══════════════════════════════════════════════════════════════
 
 class TrackStrategy : public StrategyInterface {
@@ -22,12 +25,33 @@ public:
 
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
         using AC = RobotConstants::ActionCommand;
+        ctx.setLidarEnabled(true);
 
-        // ── 0. EVADE verrouillé — durée minimale garantie ─────
         uint32_t now = millis();
+
+        // ── 0. EVADE phase 1 : recul linéaire (temps) ─────────
         if (now < _evadeUntil) {
             ctx.setState(RobotConstants::State::EVADE);
             return _evadeCmd;
+        }
+
+        // ── 0b. EVADE phase 2 : pivot 90° (EKF θ) ─────────────
+        // Angle sauvegardé au premier cycle après la fin du recul.
+        if (_pivoting) {
+            if (!_pivotAngleSaved) {
+                _pivotStartTheta = ctx.getPose().theta;
+                _pivotAngleSaved = true;
+            }
+            float dTheta = ctx.getPose().theta - _pivotStartTheta;
+            while (dTheta >  (float)M_PI) dTheta -= 2.0f * (float)M_PI;
+            while (dTheta < -(float)M_PI) dTheta += 2.0f * (float)M_PI;
+            if (fabsf(dTheta) < EVADE_PIVOT_ANGLE) {
+                ctx.setState(RobotConstants::State::EVADE);
+                return _pivotCmd;
+            }
+            _pivoting        = false;
+            _pivotAngleSaved = false;
+            _graceUntil      = millis() + EVADE_GRACE_MS;
         }
 
         // ── 1. Bords — priorité absolue ───────────────────────
@@ -40,114 +64,132 @@ public:
         bool b  = lineB.isValid  && lineB.value.scalar  > 0.0f;
 
         if (b || fl || fr) {
-            _evadeUntil = now + EVADE_MIN_MS;
-            if (b)        { _evadeCmd = AC{  SPEED_FWD,  SPEED_FWD  }; }
-            else if (fl && fr) { _evadeCmd = AC{ -SPEED_FWD, -SPEED_FWD  }; }
-            else if (fl)  { _evadeCmd = AC{ -SPEED_FWD, -SPEED_SLOW }; }
-            else          { _evadeCmd = AC{ -SPEED_SLOW, -SPEED_FWD }; }
+            // Effacer la mémoire ennemi : évite de se réaligner vers
+            // le bord qu'on vient de quitter après le pivot.
+            _hasLastEnemy    = false;
+            _spinning        = false;
+            _evadeUntil      = now + EVADE_BACKUP_MS;
+
+            if (b) {
+                _pivoting        = false;
+                _pivotAngleSaved = false;
+                _graceUntil      = now + EVADE_BACKUP_MS + EVADE_GRACE_MS;
+                _evadeCmd        = AC{ SPEED_FWD, SPEED_FWD };
+            } else {
+                // Recul avec légère correction latérale
+                _evadeCmd = (fl && fr) ? AC{ -SPEED_FWD,  -SPEED_FWD  }
+                            : fl       ? AC{ -SPEED_FWD,  -SPEED_SLOW }
+                                       : AC{ -SPEED_SLOW, -SPEED_FWD  };
+                // Pivot après recul : s'écarter du bord détecté
+                _pivoting        = true;
+                _pivotAngleSaved = false;
+                _pivotCmd = fl ? AC{  SPEED_EVADE, -SPEED_EVADE }  // FL → pivot CW
+                               : AC{ -SPEED_EVADE,  SPEED_EVADE }; // FR → pivot CCW
+            }
             ctx.setState(RobotConstants::State::EVADE);
             return _evadeCmd;
         }
 
+        // ── Grace period post-EVADE ────────────────────────────
+        // Interdit l'attaque lidar pendant EVADE_GRACE_MS pour laisser
+        // le temps de s'éloigner et éviter un rechargement immédiat
+        // vers la même paroi.
+        bool inGrace = (now < _graceUntil);
+
         // ── 2. Lidar — charge immédiate ───────────────────────
-        SensorData lidar = ctx.getLidarData();
+        if (!inGrace) {
+            SensorData lidar = ctx.getLidarData();
 
-        if (lidar.isValid) {
-            float dist  = lidar.value.vector.x;
-            float angle = lidar.value.vector.y;
+            if (lidar.isValid) {
+                float dist  = lidar.value.vector.x;
+                float angle = lidar.value.vector.y;
 
-            if (dist >= MIN_DIST_M && dist <= MAX_DIST_M) {
-                // Lidar 0° = arrière robot, 180° = avant robot
-                float diff = angle - 180.0f;
-                if (diff >  180.0f) diff -= 360.0f;
-                if (diff < -180.0f) diff += 360.0f;
+                if (dist >= MIN_DIST_M && dist <= MAX_DIST_M) {
+                    float diff = angle - 180.0f;
+                    if (diff >  180.0f) diff -= 360.0f;
+                    if (diff < -180.0f) diff += 360.0f;
 
-                // Cible trouvée → reset timer de recherche
-                _searchWaitUntil = 0;
-                _spinning        = false;
+                    // Mémoriser le cap global de l'ennemi (EKF)
+                    _spinning = false;
+                    EKF::Pose pose = ctx.getPose();
+                    _lastEnemyTheta = pose.theta + diff * ((float)M_PI / 180.0f);
+                    _hasLastEnemy   = true;
 
-                // Mémoriser la position globale de l'ennemi (EKF)
-                EKF::Pose pose = ctx.getPose();
-                float offsetRad = (angle - 180.0f) * (M_PI / 180.0f);
-                _lastEnemyTheta = pose.theta + offsetRad;
-                _hasLastEnemy   = true;
-
-                // Charge pleine puissance avec steering proportionnel
-                float diffNorm = constrain(diff / 180.0f, -1.0f, 1.0f);
-                ctx.setState(RobotConstants::State::ATTACK);
-                int l = constrain((int)(SPEED_FWD * (1.0f + diffNorm)), -255, 255);
-                int r = constrain((int)(SPEED_FWD * (1.0f - diffNorm)), -255, 255);
-                return AC{ l, r };
+                    float diffNorm = constrain(diff / 180.0f, -1.0f, 1.0f);
+                    ctx.setState(RobotConstants::State::ATTACK);
+                    int l = constrain((int)(SPEED_FWD * (1.0f + diffNorm)), -255, 255);
+                    int r = constrain((int)(SPEED_FWD * (1.0f - diffNorm)), -255, 255);
+                    return AC{ l, r };
+                }
             }
         }
 
-        // ── 3. Rien → recherche intelligente ─────────────────
+        // ── 3. Recherche ──────────────────────────────────────
         ctx.setState(RobotConstants::State::SEARCH);
 
-        // 3a. Mémoire ennemi — se réorienter vers dernière position connue
-        if (_hasLastEnemy) {
+        // 3a. Mémoire ennemi — se réorienter vers le dernier cap connu
+        if (_hasLastEnemy && !inGrace) {
             EKF::Pose pose = ctx.getPose();
             float diff = _lastEnemyTheta - pose.theta;
-            while (diff >  M_PI) diff -= 2.0f * M_PI;
-            while (diff < -M_PI) diff += 2.0f * M_PI;
+            while (diff >  (float)M_PI) diff -= 2.0f * (float)M_PI;
+            while (diff < -(float)M_PI) diff += 2.0f * (float)M_PI;
             if (fabsf(diff) > 0.25f) {
-                return diff > 0 ? AC{ SPEED_SEARCH, -SPEED_SEARCH }
-                                : AC{ -SPEED_SEARCH, SPEED_SEARCH };
+                return diff > 0 ? AC{  SPEED_SEARCH, -SPEED_SEARCH }
+                                : AC{ -SPEED_SEARCH,  SPEED_SEARCH };
             }
-            _hasLastEnemy = false;  // aligné → reprendre recherche normale
+            _hasLastEnemy = false;  // aligné → reprise du scan
         }
 
-        // 3b. Initialiser le timer au premier cycle sans cible
-        if (_searchWaitUntil == 0) _searchWaitUntil = now + SEARCH_WAIT_MS;
-
-        // Phase A : attente immobile (lidar scanne sans vibrations)
-        if (now < _searchWaitUntil) {
-            return AC{ 0, 0 };
+        // 3b. Scan rapide — demi-tour EKF puis reset (balayage continu)
+        if (!_spinning) {
+            _spinning       = true;
+            _spinStartTheta = ctx.getPose().theta;
+        }
+        EKF::Pose pose = ctx.getPose();
+        float turned = pose.theta - _spinStartTheta;
+        while (turned >  (float)M_PI) turned -= 2.0f * (float)M_PI;
+        while (turned < -(float)M_PI) turned += 2.0f * (float)M_PI;
+        if (fabsf(turned) >= SPIN_TARGET_RAD) {
+            _spinning = false;  // reset → nouveau demi-tour
         }
 
-        // Phase B : rotation 180° guidée par EKF theta (plus précis que IMU)
-        if (_spinning) {
-            EKF::Pose pose = ctx.getPose();
-            float turned = pose.theta - _spinStartTheta;
-            while (turned >  M_PI) turned -= 2.0f * M_PI;
-            while (turned < -M_PI) turned += 2.0f * M_PI;
-            if (fabsf(turned) >= SPIN_TARGET_RAD) {
-                _spinning        = false;
-                _searchWaitUntil = now + SEARCH_WAIT_MS;
-                return AC{ 0, 0 };
-            }
-            return AC{ SPEED_SEARCH, -SPEED_SEARCH };
-        }
-
-        // Attente expirée → démarrer le spin, mémoriser theta de départ
-        _spinning       = true;
-        _spinStartTheta = ctx.getPose().theta;
         return AC{ SPEED_SEARCH, -SPEED_SEARCH };
     }
 
 private:
-    // ── EVADE verrouillé ─────────────────────────────────────
+    // ── EVADE phase 1 (recul linéaire, temps) ────────────────
     uint32_t                       _evadeUntil = 0;
+    uint32_t                       _graceUntil = 0;
     RobotConstants::ActionCommand  _evadeCmd   = {0, 0};
-    static constexpr uint32_t      EVADE_MIN_MS = 350;  // ms minimum pour quitter le bord
+    RobotConstants::ActionCommand  _pivotCmd   = {0, 0};
+    static constexpr uint32_t      EVADE_BACKUP_MS = 200;   // recul avant pivot
+    static constexpr uint32_t      EVADE_GRACE_MS  = 400;   // fenêtre de sécurité post-pivot
 
-    // ── Recherche intelligente ────────────────────────────────
-    uint32_t _searchWaitUntil = 0;       // fin de la phase d'attente immobile
-    bool     _spinning        = false;   // true = rotation 180° en cours
-    float    _spinStartTheta  = 0.0f;   // theta EKF au début du spin
-    static constexpr uint32_t SEARCH_WAIT_MS  = 300;                // attente immobile (ms)
-    static constexpr float    SPIN_TARGET_RAD = 0.95f * M_PI;       // ~171° en radians
+    // ── EVADE phase 2 — pivot 90° (EKF θ) ────────────────────
+    bool  _pivoting        = false;
+    bool  _pivotAngleSaved = false;
+    float _pivotStartTheta = 0.0f;
+    static constexpr float EVADE_PIVOT_ANGLE = (float)M_PI / 2.0f;  // 90°
+    static constexpr int   SPEED_EVADE       = 200;
+
+    // ── Scan rapide (EKF θ) ───────────────────────────────────
+    bool  _spinning       = false;
+    float _spinStartTheta = 0.0f;
+    static constexpr float SPIN_TARGET_RAD = 0.95f * (float)M_PI;  // ~171°
 
     // ── Mémoire dernière position ennemi ─────────────────────
-    bool  _hasLastEnemy    = false;
-    float _lastEnemyTheta  = 0.0f;  // angle global (rad, EKF) de la dernière détection
+    bool  _hasLastEnemy   = false;
+    float _lastEnemyTheta = 0.0f;
 
-    // ── Distances ─────────────────────────────────────────────
-    static constexpr float MIN_DIST_M  = 0.10f;  // 100 mm
-    static constexpr float MAX_DIST_M  = 0.67f;  // 670 mm
+    // ── Distances lidar ───────────────────────────────────────
+    // MIN_DIST_M = 0.055m : filtre uniquement la valeur plancher 0.050m
+    // que le capteur retourne quand aucune cible valide n'est en vue.
+    // Les vraies détections commencent à ~0.064m et doivent passer.
+    static constexpr float MIN_DIST_M  = 0.055f;
+    static constexpr float MAX_DIST_M  = 0.67f;
 
     // ── Vitesses ──────────────────────────────────────────────
-    static constexpr int SPEED_FWD    = 255;  // charge pleine puissance
-    static constexpr int SPEED_SLOW   = 100;  // évitement latéral
-    static constexpr int SPEED_SEARCH =  80;  // rotation surveillance
+    static constexpr int SPEED_FWD    = 255;
+    static constexpr int SPEED_SLOW   = 100;
+    static constexpr int SPEED_SEARCH = 180;
 };

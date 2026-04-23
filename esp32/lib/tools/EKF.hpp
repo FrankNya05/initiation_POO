@@ -10,7 +10,7 @@
 //
 //  Sources de mesure fusionnées :
 //  - Encodeurs (odométrie différentielle) → prédiction
-//  - IMU gz (gyroscope Z)                → correction du cap
+//  - IMU gx (gyroscope X = axe lacet)    → correction du cap
 //
 //  Paramètres robot (depuis RobotConstants.hpp) :
 //  - Diamètre roue    : WHEEL_DIAMETER_MM  (30 mm)
@@ -82,7 +82,7 @@ public:
 
     // ── Mise à jour — gyroscope IMU ───────────────────────────
     //  Appeler à chaque cycle taskSensors (50 Hz)
-    //  @param gyroRate  vitesse angulaire de rotation (axe actif) en rad/s
+    //  @param gyroRate  vitesse angulaire gx (lacet) en rad/s — signe : CCW > 0
     //  @param dtSec     intervalle de temps en secondes
     void updateIMU(float gyroRate, float dtSec) {
     const float zMeasured = gyroRate * dtSec;
@@ -100,9 +100,8 @@ public:
     _y     += K[1] * innovation;
     _theta  = _wrapAngle(_theta + K[2] * innovation);
 
-    // Mise à jour de la covariance P = (I - KH)P
+    // Mise à jour de la covariance P = (I - KH)P  avec H = [0,0,1]
     for (int i = 0; i < 3; i++) {
-        float row2 = _cov[2][i]; // H est [0, 0, 1]
         _cov[i][0] -= K[i] * _cov[2][0];
         _cov[i][1] -= K[i] * _cov[2][1];
         _cov[i][2] -= K[i] * _cov[2][2];

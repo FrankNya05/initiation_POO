@@ -22,8 +22,8 @@
  *  - value.imu.gx/gy/gz : vitesse angulaire en °/s
  *
  * Usage minimal :
- *  - L'axe gz (gyroscope Z) est le plus utile pour
- *    surveiller la rotation du robot en sumo.
+ *  - L'axe gx (gyroscope X) mesure le lacet (yaw) du robot.
+ *    ax est aligné avec la gravité — ne pas utiliser pour les chocs.
  */
 
 #pragma once
@@ -84,5 +84,7 @@ private:
 
     Adafruit_MPU6050 _mpu;       // objet de la librairie Adafruit
     SensorData       _data;      // données retournées par getData()
-    float            _gxBias = 0.0f;  // biais statique mesuré au démarrage (°/s)
+    float            _gxBias = 0.0f;  // biais statique gx (°/s)
+    float            _ayBias = 0.0f;  // biais statique ay (m/s²)
+    float            _azBias = 0.0f;  // biais statique az (m/s²) — inclut gravité si robot incliné
 };

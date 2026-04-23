@@ -45,7 +45,7 @@ public:
     }
 
     // ───────────────────────────────────────────────────────────
-    //  Lidar
+    //  Lidar — données + activation
     // ───────────────────────────────────────────────────────────
 
     void setLidarData(const SensorData& d) {
@@ -54,6 +54,17 @@ public:
 
     SensorData getLidarData() {
         _lock(); auto d = _lidarData; _unlock(); return d;
+    }
+
+    // Active ou désactive le scan Lidar (vérifié par taskLidar).
+    // Chaque stratégie SET ce flag à chaque execute() — la dernière
+    // stratégie active l'emporte (pas d'état résiduel entre switchs).
+    void setLidarEnabled(bool en) {
+        _lock(); _lidarEnabled = en; _unlock();
+    }
+
+    bool isLidarEnabled() {
+        _lock(); bool en = _lidarEnabled; _unlock(); return en;
     }
 
     // ───────────────────────────────────────────────────────────
@@ -169,6 +180,7 @@ private:
     // ── Données internes ──────────────────────────────────────
     RobotConstants::State         _state       = RobotConstants::State::STANDBY;
     SensorData                    _lidarData;
+    bool                          _lidarEnabled = true;
     SensorData                    _lineData[9];     // indexé par _posToIndex
     SensorData                    _tofData[9];      // indexé par _posToIndex
     SensorData                    _imuData;

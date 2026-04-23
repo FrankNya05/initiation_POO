@@ -57,13 +57,18 @@ enum class MotorSide : uint8_t {
     constexpr int   ENCODER_PPR        = 7;
     constexpr int   ENCODER_QUADRATURE = 4;
     constexpr int   GEAR_RATIO_LEFT    = 100;  // moteur gauche 100:1 (validé expérimentalement)
-    constexpr int   GEAR_RATIO_RIGHT   = 50;   // moteur droit  ~50:1 (vendeur a livré deux ratios différents)
-    // ↑ Si le robot dévie encore après calibration, ajuster GEAR_RATIO_RIGHT
-    //   via : GEAR_RATIO_RIGHT = 750 / tours_physiques_droite (mesure physique à PWM=100)
+    constexpr int   GEAR_RATIO_RIGHT   = 50;   // moteur droit  ~50:1 (vendeur — à recalibrer)
+    // ── Calibration PULSES_PER_REV_RIGHT ────────────────────────────────────────────────
+    // Le rapport de réduction réel est probablement ~54.7:1 (déduit de SPEED_MAX_RPM_R=192).
+    // Pour mesurer le PPR exact : poser le robot, faire tourner la roue droite d'exactement
+    // 1 tour à la main, compter les pulses → PULSES_PER_REV_RIGHT = pulses mesurés.
+    // Un PPR sous-estimé (1400 < vrai) fait que toMM() surestime la distance droite → EKF
+    // croit que le robot vire à gauche → pidYaw pousse à droite en permanence.
+    // ────────────────────────────────────────────────────────────────────────────────────
 
     constexpr int   GEAR_RATIO         = GEAR_RATIO_LEFT;  // alias pour compatibilité
-    constexpr int   PULSES_PER_REV     = ENCODER_PPR * ENCODER_QUADRATURE * GEAR_RATIO_LEFT;  // 2800
-    constexpr int   PULSES_PER_REV_RIGHT = ENCODER_PPR * ENCODER_QUADRATURE * GEAR_RATIO_RIGHT; // 1400
+    constexpr int   PULSES_PER_REV       = ENCODER_PPR * ENCODER_QUADRATURE * GEAR_RATIO_LEFT;  // 2800
+    constexpr int   PULSES_PER_REV_RIGHT = ENCODER_PPR * ENCODER_QUADRATURE * GEAR_RATIO_RIGHT; // 1400 (voir note ci-dessus)
 
     constexpr float WHEEL_DIAMETER_MM      = 30.0f;
     constexpr float WHEEL_CIRCUMFERENCE_MM = 3.14159f * WHEEL_DIAMETER_MM;

@@ -17,7 +17,7 @@
 //
 //  Capteurs utilisés :
 //  - LineSensors FRONT_LEFT / FRONT_RIGHT / BACK → bords
-//  - IMU ax/ay                                  → détection d'impact
+//  - IMU ay/az                                  → détection d'impact
 //  - TOF FRONT_LEFT / FRONT_RIGHT               → détection rapprochée
 //  - Lidar FRONT                                → distance + angle ennemi
 // ═══════════════════════════════════════════════════════════════
@@ -31,6 +31,7 @@ public:
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
 
         using AC = RobotConstants::ActionCommand;
+        ctx.setLidarEnabled(true);
 
         // ── 0. EVADE verrouillé — durée minimale garantie ─────
         uint32_t now = millis();
@@ -89,8 +90,8 @@ public:
         // ── 2. Impact IMU — choc détecté → repositionnement ───
         SensorData imu = ctx.getIMUData();
         if (imu.isValid) {
-            float impact = sqrtf(imu.value.imu.ax * imu.value.imu.ax
-                               + imu.value.imu.ay * imu.value.imu.ay);
+            float impact = sqrtf(imu.value.imu.ay * imu.value.imu.ay
+                               + imu.value.imu.az * imu.value.imu.az);
             if (impact > IMPACT_THRESHOLD_G) {
                 // Choc ! Le robot est en train d'être repoussé
                 // → reculer et pivoter pour changer d'angle d'approche
@@ -183,7 +184,7 @@ private:
     static constexpr float    RECENTER_STOP_MM = 100.0f; // arrêt si déjà proche du centre
 
     // ── Seuils ────────────────────────────────────────────────
-    static constexpr float IMPACT_THRESHOLD_G = 2.0f;    // seuil choc IMU (m/s² ≈ 2g)
+    static constexpr float IMPACT_THRESHOLD_G = 3.0f;    // seuil choc IMU dynamique ay/az (m/s²)
     static constexpr float TOF_MIN_MM        = 350.0f;  // ignore les lectures < 350mm (sol/structure)
     static constexpr float TOF_CLOSE_MM      = 450.0f;  // TOF : contact imminent (mm)
     static constexpr float LIDAR_CLOSE_M     =   0.35f; // Lidar : contre-attaque (m)

@@ -296,7 +296,7 @@ void taskComm(void* pvParameters)
             float tofFLmm = tofFL.isValid ? tofFL.value.scalar : -1.0f;
             float tofFRmm = tofFR.isValid ? tofFR.value.scalar : -1.0f;
 
-            char buf[640];
+            char buf[800];
             snprintf(buf, sizeof(buf),
                 "{"
                     "\"type\":\"TELEMETRY\","
@@ -334,6 +334,15 @@ void taskComm(void* pvParameters)
                         "\"motors\":{"
                             "\"left\":%d,"
                             "\"right\":%d"
+                        "},"
+                        "\"pose\":{"
+                            "\"x\":%.1f,"
+                            "\"y\":%.1f,"
+                            "\"theta\":%.3f"
+                        "},"
+                        "\"encoders\":{"
+                            "\"leftRpm\":%.1f,"
+                            "\"rightRpm\":%.1f"
                         "}"
                     "}"
                 "}",
@@ -352,7 +361,9 @@ void taskComm(void* pvParameters)
                 ax, ay, az,
                 gx, gy, gz,
                 imu.isValid  ? "true" : "false",
-                cmd.leftSpeed, cmd.rightSpeed
+                cmd.leftSpeed, cmd.rightSpeed,
+                pose.x, pose.y, pose.theta,
+                encL.rpm, encR.rpm
             );
             comm->send(std::string(buf));
         }
@@ -412,7 +423,13 @@ void taskEncoders(void* pvParameters)
             uint32_t now = millis();
             float dtSec  = (now - lastMs) / 1000.0f;
             lastMs       = now;
-            p->ekf->updateIMU(imuData.value.imu.gx * DEG_TO_RAD, dtSec);
+            float gxRad = imuData.value.imu.gx * DEG_TO_RAD;
+            // Zone morte ±3 deg/s : même seuil que le PID cap, évite que le
+            // biais résiduel gx (~2.5 deg/s) accumule une dérive de cap infinie.
+            static constexpr float GYRO_EKF_DEADBAND_RAD = 3.0f * (float)DEG_TO_RAD;
+            if (fabsf(gxRad) > GYRO_EKF_DEADBAND_RAD) {
+                p->ekf->updateIMU(gxRad, dtSec);
+            }
         }
 
         // 5. Publier la pose estimée
@@ -450,7 +467,7 @@ void taskEncoders(void* pvParameters)
             int pwmR = ffR + (int)p->pidRight->compute(right.rpm);
 
             // Correction de cap — uniquement en ligne droite (L == R, même signe)
-            // Consigne pidYaw = 0 deg/s : si gx != 0, le robot tourne → corriger
+            // gx > 0 = rotation CCW (gauche) ; corr < 0 → pwmL monte, pwmR baisse → vire CW
             if (cmd.leftSpeed == cmd.rightSpeed && imuData.isValid) {
                 float gx = imuData.value.imu.gx;
                 // Zone morte ±3 deg/s : ignore le biais résiduel et le bruit de vibration

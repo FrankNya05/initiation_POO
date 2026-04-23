@@ -46,15 +46,20 @@ bool IMUSensor::init() {
     {
         constexpr int    N   = 200;
         constexpr int    DLY = 1;   // ms entre échantillons → ~200 ms total
-        double sum = 0.0;
+        double sumGx = 0.0, sumAy = 0.0, sumAz = 0.0;
         sensors_event_t a, g, t;
         for (int i = 0; i < N; i++) {
             _mpu.getEvent(&a, &g, &t);
-            sum += g.gyro.x * RAD_TO_DEG;
+            sumGx += g.gyro.x * RAD_TO_DEG;
+            sumAy += a.acceleration.y;
+            sumAz += a.acceleration.z;
             delay(DLY);
         }
-        _gxBias = (float)(sum / N);
-        Serial.printf("[IMUSensor] Biais gyro gx = %+.3f deg/s\n", _gxBias);
+        _gxBias = (float)(sumGx / N);
+        _ayBias = (float)(sumAy / N);
+        _azBias = (float)(sumAz / N);
+        Serial.printf("[IMUSensor] Biais gx=%+.3f deg/s  ay=%+.3f m/s²  az=%+.3f m/s²\n",
+                      _gxBias, _ayBias, _azBias);
     }
 
     LOG("[IMUSensor] MPU6050 initialisé avec succès.");
@@ -77,9 +82,9 @@ bool IMUSensor::update() {
 
     // Remplit le membre imu de l'union SensorValue.
     // ax/ay/az en m/s², gx/gy/gz en °/s (rad/s natif Adafruit → °/s).
-    _data.value.imu.ax = accel.acceleration.x;
-    _data.value.imu.ay = accel.acceleration.y;
-    _data.value.imu.az = accel.acceleration.z;
+    _data.value.imu.ax = accel.acceleration.x;           // axe gravité — non corrigé
+    _data.value.imu.ay = accel.acceleration.y - _ayBias; // biais statique retiré
+    _data.value.imu.az = accel.acceleration.z - _azBias; // biais statique retiré
 
     // Note : Adafruit retourne le gyroscope en rad/s.
     // On convertit en °/s pour une utilisation plus intuitive
