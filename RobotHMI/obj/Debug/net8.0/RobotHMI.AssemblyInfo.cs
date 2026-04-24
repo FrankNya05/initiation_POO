@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RobotHMI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+174a337af193dd113f91d3831096a094e68624b3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dcfc723805ad7e524d605b306140086e37479233")]
 [assembly: System.Reflection.AssemblyProductAttribute("RobotHMI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RobotHMI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

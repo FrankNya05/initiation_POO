@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "driver/uart.h"
 #include "SensorsInterface.hpp"
 #include "PinConfig.hpp"
 #include "RTOSConfig.hpp"
@@ -55,47 +56,70 @@ public:
         , _nearestAngle(0)
         , _validPoints(0)
         , _lastResetMs(0)
+        , _uartQueue(nullptr)
     {}
 
     bool init() override {
-
-        Serial2.setRxBufferSize(4096);
-
-        Serial2.begin(
-            230400,
-            SERIAL_8N1,
-            RobotConfig::RX_LIDAR,
-            RobotConfig::TX_LIDAR
-        );
+        const uart_config_t cfg = {
+            .baud_rate  = 230400,
+            .data_bits  = UART_DATA_8_BITS,
+            .parity     = UART_PARITY_DISABLE,
+            .stop_bits  = UART_STOP_BITS_1,
+            .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
+            .rx_flow_ctrl_thresh = 0,
+            .source_clk = UART_SCLK_APB,
+        };
+        uart_param_config(UART_NUM_2, &cfg);
+        uart_set_pin(UART_NUM_2,
+                     RobotConfig::TX_LIDAR, RobotConfig::RX_LIDAR,
+                     UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        uart_driver_install(UART_NUM_2, 4096, 0, 20, &_uartQueue, 0);
 
         _startupTime = millis();
         _started = false;
 
-        LOG("[LidarSensor] FreeRTOS Ready Init");
-
+        LOG("[LidarSensor] ESP-IDF UART DMA Init");
         return true;
     }
 
+    // Non-blocking: vide le ring buffer sans attendre (garde la compatibilité SensorsInterface).
     bool update() override {
-
         _handleStartup();
-
         bool gotPacket = false;
-
-        while (Serial2.available()) {
-
-            _processByte(Serial2.read());
-
+        uint8_t buf[128];
+        int len = uart_read_bytes(UART_NUM_2, buf, sizeof(buf), 0);
+        for (int i = 0; i < len; i++) {
+            _processByte(buf[i]);
             if (_packetReady) {
                 _parsePacket();
                 _packetReady = false;
                 gotPacket = true;
             }
         }
-
         _publishData();
-
         return gotPacket;
+    }
+
+    // Bloquant : réveille la tâche dès qu'un événement UART arrive (interrupt/DMA → queue).
+    bool waitAndProcess(TickType_t timeout = pdMS_TO_TICKS(20)) {
+        _handleStartup();
+        uart_event_t event;
+        if (!xQueueReceive(_uartQueue, &event, timeout))
+            return false;
+        if (event.type != UART_DATA)
+            return false;
+        uint8_t buf[256];
+        int len = uart_read_bytes(UART_NUM_2, buf,
+                                  min((size_t)event.size, sizeof(buf)), 0);
+        for (int i = 0; i < len; i++) {
+            _processByte(buf[i]);
+            if (_packetReady) {
+                _parsePacket();
+                _packetReady = false;
+            }
+        }
+        _publishData();
+        return true;
     }
 
     SensorData getData() const override {
@@ -103,8 +127,8 @@ public:
     }
 
     void stop() {
-        Serial2.write(LidarProtocol::CMD_PREFIX);
-        Serial2.write(LidarProtocol::CMD_STOP);
+        const uint8_t cmd[] = { LidarProtocol::CMD_PREFIX, LidarProtocol::CMD_STOP };
+        uart_write_bytes(UART_NUM_2, cmd, sizeof(cmd));
     }
 
 private:
@@ -155,6 +179,8 @@ private:
 
     uint32_t _lastResetMs;
 
+    QueueHandle_t _uartQueue;
+
     SensorData _data;
 
     // ── Diagnostics checksum ──────────────────────
@@ -171,8 +197,8 @@ private:
 
         if (millis() - _startupTime > LidarProtocol::STARTUP_DELAY_MS) {
 
-            Serial2.write(LidarProtocol::CMD_PREFIX);
-            Serial2.write(LidarProtocol::CMD_START);
+            const uint8_t cmd[] = { LidarProtocol::CMD_PREFIX, LidarProtocol::CMD_START };
+            uart_write_bytes(UART_NUM_2, cmd, sizeof(cmd));
 
             _started = true;
 

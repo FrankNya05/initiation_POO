@@ -102,9 +102,8 @@ CommandTaskParams cmdParams {
 void taskLidar(void* pv) {
     lidar.init();
     for (;;) {
-        lidar.update();
+        lidar.waitAndProcess();
         RobotContext::instance().setLidarData(lidar.getData());
-        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
