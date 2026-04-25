@@ -1,9 +1,9 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Markup.Xaml;
 using RobotHMI.Services;
 using RobotHMI.ViewModels;
 using RobotHMI.Views;
-using Avalonia.Markup.Xaml;
 
 namespace RobotHMI;
 
@@ -75,7 +75,7 @@ public partial class App : Application
             // Phase 3 — Register ACK handler
             // ----------------------------------------------------------------
             // Routes ACK messages from the robot to ControlPanelViewModel.
-            // ACK format: { "type": "ACK", "payload": "FORWARD" }
+            // V1 ACK format: { "type": "ACK", "payload": { "command": "FORWARD" } }
             router.Register("ACK", mainWindowViewModel.ControlPanel.OnAckReceived);
 
             // ----------------------------------------------------------------

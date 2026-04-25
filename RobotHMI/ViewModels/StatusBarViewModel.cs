@@ -122,10 +122,9 @@ public class StatusBarViewModel : ViewModelBase
     public string RobotStatusText => RobotStatus switch
     {
         RobotStatus.Idle       => "IDLE",
-        RobotStatus.Running    => "RUNNING",
-        RobotStatus.Searching  => "SEARCHING",
-        RobotStatus.Attacking  => "ATTACKING",
-        RobotStatus.Retreating => "RETREATING",
+        RobotStatus.Searching  => "SEARCH",
+        RobotStatus.Attacking  => "ATTACK",
+        RobotStatus.Retreating => "DEFENSE",
         RobotStatus.Error      => "ERROR",
         _                      => "—"
     };
@@ -174,22 +173,15 @@ public class StatusBarViewModel : ViewModelBase
     /// </summary>
     public void OnLogReceived(string rawJson)
     {
-        string logText;
+        // V1 LOG format: { "type": "LOG", "payload": { "message": "Battery low" } }
+        var logText = TelemetryParser.ParseLogMessage(rawJson);
 
-        try
+        if (string.IsNullOrEmpty(logText))
         {
-            using var doc = JsonDocument.Parse(rawJson);
-            logText = doc.RootElement
-                         .GetProperty("payload")
-                         .GetString() ?? "(empty log)";
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[StatusBarViewModel] Failed to parse LOG: {ex.Message}");
+            Console.WriteLine($"[StatusBarViewModel] Empty or unparseable LOG: {rawJson}");
             return;
         }
 
-        // Stamp the entry with a time so the operator can correlate events.
         var entry = $"[{DateTime.Now:HH:mm:ss}] {logText}";
 
         // Marshal the collection modification to the UI thread.
