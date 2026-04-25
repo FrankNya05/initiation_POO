@@ -5,67 +5,62 @@
 #include "UARTComm.hpp"
 #include "WiFiComm.hpp"
 
-#include <memory>
+#include <memory>      // std::unique_ptr
 #include <functional>
 #include <string>
 
 /*
  * CommunicationManager.hpp
  * -------------------------
- * Central hub for all robot ↔ HMI communication.
- * Implements the V1 MQTT protocol on top of WiFiComm.
+ * Central hub for all robot communication.
  *
- * ── Design intent ──────────────────────────────────────────────────────────
+ * RESPONSIBILITIES:
+ *  - Owns both communication channels (BLE and UART)
+ *  - Selects which channel is currently active
+ *  - Delegates all ICommInterface operations to the active channel
+ *  - Provides autoSelect() to pick the channel automatically at runtime
+ *  - Exposes a single, stable API to the rest of the robot
  *
- * CommunicationManager is the single interface the rest of the robot uses
- * for all HMI communication. No other class needs to know about JSON,
- * MQTT topics, or ArduinoJson.
+ * WHY THIS CLASS EXISTS:
+ *  The robot's logic should never care whether it's talking over BLE or UART.
+ *  CommunicationManager hides that decision. If BLE drops and you switch to
+ *  UART, nothing else in the code needs to change.
  *
- * It does three things:
- *   1. Wraps a WiFiComm transport (primary and only required transport).
- *   2. Exposes high-level outgoing methods (sendTelemetry, sendState, …).
- *   3. Parses incoming JSON and fires typed callbacks (onMotorCommand, onRobotCommand).
+ * -------------------------------------------------------------------------
+ * KEY C++ DESIGN POINT — How active_comm_ is stored
+ * -------------------------------------------------------------------------
  *
- * JSON work is fully delegated to TelemetrySerializer and CommandParser.
+ * The UML shows _activeComm as a reference to ICommInterface.
+ * In C++, you have three realistic options:
  *
- * ── WiFiComm is the primary transport ─────────────────────────────────────
+ *   Option A — raw pointer:   ICommInterface* active_comm_
+ *   Option B — reference:     ICommInterface& active_comm_   ← NOT usable here
+ *   Option C — unique_ptr:    std::unique_ptr<ICommInterface> active_comm_
  *
- * CommunicationManager owns a WiFiComm instance. The V1 MQTT topics are
- * fixed at construction:
- *   publish  → "robot/telemetry"
- *   subscribe → "robot/cmd"
+ * Option B (reference) looks natural but is IMPOSSIBLE in this context:
+ *   - A C++ reference must be bound at construction and CANNOT be rebound later.
+ *   - Since autoSelect() needs to switch channels at runtime, a reference breaks.
+ *   - References also cannot be null — but before any channel is ready, null is valid.
  *
- * An optional secondary ICommInterface* can be supplied (e.g. a BLE or UART
- * channel already instantiated elsewhere). If provided, incoming messages on
- * that channel are also parsed and routed. Outgoing messages always go through
- * WiFiComm. Ownership of the secondary channel stays with the caller.
+ * Option C (unique_ptr) is ideal for OWNING objects, but here CommunicationManager
+ *   already owns BLE and UART separately via their own unique_ptrs. active_comm_
+ *   is just a VIEW into one of those — it should not own anything.
  *
- * ── sendRaw() connection guard ─────────────────────────────────────────────
+ * Option A (raw pointer) is the correct choice here:
+ *   - It can be reassigned (switch channels at runtime)    OK
+ *   - It can be nullptr before initialization              OK
+ *   - Lifetime is safe: ble_ and uart_ outlive it         OK
+ *   - It does NOT own the object — ownership stays with unique_ptrs  OK
  *
- * sendRaw() checks isConnected() before forwarding to WiFiComm. If the MQTT
- * broker connection is not active the message is silently dropped and a LOG
- * warning is emitted. This prevents PubSubClient errors on disconnect.
+ * This is a standard C++ idiom: unique_ptr for ownership, raw pointer for observation.
  *
- * ── Decoupling from RobotContext ──────────────────────────────────────────
- *
- * sendTelemetry() takes a const TelemetryData& — the caller (task layer)
- * fills the struct from RobotContext and passes it in. CommunicationManager
- * never imports RobotContext.
- *
- * ── Logging ───────────────────────────────────────────────────────────────
- *
- * All log output uses LOG / LOGF from RTOSConfig.hpp.
- * No raw Serial calls are present in this file or its implementation.
- *
- * ── OOP concepts demonstrated ─────────────────────────────────────────────
- *   - Composition: owns WiFiComm via unique_ptr (RAII / clear ownership)
- *   - Polymorphism: secondary channel is ICommInterface* (any transport)
- *   - Encapsulation: JSON and protocol details invisible to callers
- *   - Delegation: formatting → TelemetrySerializer, parsing → CommandParser
- *   - Callbacks: std::function for flexible, decoupled event handling
+ * -------------------------------------------------------------------------
+ * OOP CONCEPTS DEMONSTRATED:
+ *  - Composition: owns BLE and UART via unique_ptr (RAII)
+ *  - Polymorphism: active_comm_ is ICommInterface*, works with any concrete type
+ *  - Encapsulation: channel switching logic is hidden from callers
+ *  - Abstraction: callers only see send(), isConnected(), onReceive()
  */
-<<<<<<< HEAD
-=======
 
 // Identifies which channel is currently active.
 // enum class prevents name collisions (no bare "BLE" in the global scope).
@@ -75,42 +70,21 @@ enum class CommChannel {
     UART
 };
 
->>>>>>> origin/main
 class CommunicationManager {
 public:
+    // Constructor: creates both channels, defaults to BLE as the active one.
+    //   uart_serial : which hardware serial port to use (e.g. Serial1 for Raspberry Pi)
+    //   uart_baud   : baud rate for UART (must match the Raspberry Pi setting)
+    explicit CommunicationManager(HardwareSerial& uart_serial = Serial1,
+                                  unsigned long uart_baud = 115200);
 
-    // -----------------------------------------------------------------------
-    // Constructor
-    // -----------------------------------------------------------------------
-    // Creates a WiFiComm transport with the given network parameters.
-    // Topics are fixed to V1 values at construction time.
-    //
-    // secondary (optional): an ICommInterface* whose incoming messages are
-    // also parsed. Ownership stays with the caller. Pass nullptr if not needed.
-    //
-    // Example — WiFiComm only:
-    //   CommunicationManager comm("MySSID", "mypassword", "192.168.1.100");
-    //
-    // Example — with a secondary receive channel:
-    //   CommunicationManager comm("MySSID", "mypassword", "192.168.1.100",
-    //                             1883, &mySecondaryChannel);
-    // -----------------------------------------------------------------------
-    CommunicationManager(const char*     ssid,
-                         const char*     password,
-                         const char*     brokerIp,
-                         uint16_t        brokerPort = 1883,
-                         ICommInterface* secondary  = nullptr);
-
+    // Destructor: unique_ptrs clean up automatically (RAII — nothing manual needed)
     ~CommunicationManager() = default;
 
     // -----------------------------------------------------------------------
-    // Lifecycle
+    // Channel selection
     // -----------------------------------------------------------------------
 
-<<<<<<< HEAD
-    // Connects to WiFi and MQTT. Call once in setup().
-    // Also registers callbacks on the secondary channel if one was provided.
-=======
     // Manually select which channel should be active.
     // Typically called before begin(), or between matches.
     void selectChannel(CommChannel channel);
@@ -139,97 +113,33 @@ public:
     // -----------------------------------------------------------------------
 
     // Initialize all owned channels and start the active one.
->>>>>>> origin/main
     void begin();
 
-    // Must be called every loop iteration (or from a FreeRTOS task).
-    // Keeps the MQTT connection alive and dispatches incoming messages.
-    void update();
+    // Send a message through the active channel.
+    void send(const std::string& data);
 
-    // True when the MQTT broker connection is active.
+    // Returns true if the active channel has a live connection.
     bool isConnected() const;
 
-    // -----------------------------------------------------------------------
-    // Transport event callbacks
-    // -----------------------------------------------------------------------
+    // Register what to do when a message arrives.
+    void onReceive(std::function<void(const std::string&)> callback);
 
+    // Register what to do when a device connects.
     void onConnect(std::function<void()> callback);
+
+    // Register what to do when a device disconnects.
     void onDisconnect(std::function<void()> callback);
 
     // -----------------------------------------------------------------------
-    // Outgoing messages — high-level API
+    // Polling — call from a FreeRTOS task or the Arduino loop()
     // -----------------------------------------------------------------------
 
-    // sendTelemetry
-    // --------------
-    // Serializes a pre-filled TelemetryData struct and sends it as a
-    // TELEMETRY message over MQTT.
-    //
-    // The caller (task layer) fills the struct from RobotContext.
-    // CommunicationManager only serializes and forwards.
-    //
-    // Silently dropped (with a LOG warning) if not connected.
-    void sendTelemetry(const TelemetryData& data);
-
-    // sendState
-    // ----------
-    // Sends a STATE message for the given firmware state enum value.
-    // Call whenever the robot's state machine transitions.
-    //
-    // Silently dropped (with a LOG warning) if not connected.
-    void sendState(RobotConstants::State state);
-
-    // sendAck
-    // --------
-    // Sends an ACK message echoing the processed command string.
-    // Called automatically by _handleIncoming() — rarely needed manually.
-    //
-    // Silently dropped (with a LOG warning) if not connected.
-    void sendAck(const std::string& command);
-
-    // sendLog
-    // --------
-    // Sends a LOG message with a freeform debug string (≤100 chars recommended).
-    //
-    // Silently dropped (with a LOG warning) if not connected.
-    void sendLog(const std::string& message);
-
-    // -----------------------------------------------------------------------
-    // Incoming commands — typed callbacks
-    // -----------------------------------------------------------------------
-
-    // onMotorCommand
-    // ---------------
-    // Registers a callback that fires when a valid CMD_MOTOR message arrives.
-    // The callback receives a MotorCommand struct — no JSON handling needed.
-    //
-    // Example:
-    //   comm.onMotorCommand([](const MotorCommand& cmd) {
-    //       if (cmd.action == "FORWARD") driver.setSpeed(cmd.speed, cmd.speed);
-    //   });
-    void onMotorCommand(std::function<void(const MotorCommand&)> callback);
-
-    // onRobotCommand
-    // ---------------
-    // Registers a callback that fires when a valid CMD_ROBOT message arrives.
-    // The callback receives a RobotCommand struct — no JSON handling needed.
-    //
-    // Example:
-    //   comm.onRobotCommand([](const RobotCommand& cmd) {
-    //       if (cmd.command == "START") robot.start();
-    //   });
-    void onRobotCommand(std::function<void(const RobotCommand&)> callback);
-
-    // -----------------------------------------------------------------------
-    // Raw send — low-level escape hatch
-    // -----------------------------------------------------------------------
-    // Includes a connection guard: does nothing if not connected.
-    // Prefer the high-level methods above for all normal usage.
-    void sendRaw(const std::string& data);
+    // Handles periodic work:
+    //   - Reads incoming UART bytes and fires the receive callback
+    //   - Runs autoSelect() if auto-select is enabled
+    void update();
 
 private:
-<<<<<<< HEAD
-=======
     // --- Owned channels ---
     // CommunicationManager is responsible for the lifetime of all channels.
     // unique_ptr guarantees they are destroyed when CommunicationManager is destroyed.
@@ -237,26 +147,25 @@ private:
     std::unique_ptr<RobotBLEServer> ble_;
     std::unique_ptr<WiFiComm>       wifi_;   // nullptr si WiFi non configuré
     std::unique_ptr<UARTComm>       uart_;
->>>>>>> origin/main
 
-    // ── Primary transport: WiFiComm (owned) ───────────────────────────────
-    std::unique_ptr<WiFiComm> wifi_;
+    // --- Active channel pointer (raw pointer = observer, NOT owner) ---
+    //
+    // Points to either ble_.get() or uart_.get().
+    // NEVER call delete on this — ownership stays with the unique_ptrs above.
+    ICommInterface* active_comm_;
 
-    // ── Secondary transport: any ICommInterface (not owned, receive-only) ─
-    // nullptr when no secondary channel is configured.
-    ICommInterface* secondary_;
+    // --- Internal state ---
+    CommChannel current_channel_;
+    bool        auto_select_enabled_;
 
-    // ── Stored transport callbacks ────────────────────────────────────────
-    std::function<void()> connect_callback_;
-    std::function<void()> disconnect_callback_;
+    // Stored callbacks — kept here so they survive a channel switch.
+    // When selectChannel() is called, these are re-applied to the new channel.
+    std::function<void(const std::string&)> receive_callback_;
+    std::function<void()>                   connect_callback_;
+    std::function<void()>                   disconnect_callback_;
 
-    // ── Protocol-level typed callbacks ────────────────────────────────────
-    std::function<void(const MotorCommand&)> motor_command_callback_;
-    std::function<void(const RobotCommand&)> robot_command_callback_;
+    // --- Internal helpers ---
 
-    // ── Internal helpers ──────────────────────────────────────────────────
-
-    // Parses a raw incoming JSON string, routes to the typed callback,
-    // and sends an automatic ACK. Registered as onReceive on all channels.
-    void _handleIncoming(const std::string& raw);
+    // Applies the stored callbacks to a given channel interface pointer.
+    void applyCallbacksTo(ICommInterface* channel);
 };

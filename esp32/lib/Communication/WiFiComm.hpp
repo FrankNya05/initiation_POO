@@ -3,7 +3,6 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <functional>
-#include <string>
 
 class WiFiComm : public ICommInterface {
 
@@ -23,8 +22,7 @@ private:
     std::function<void()>                   _onConnectCb    = nullptr;
     std::function<void()>                   _onDisconnectCb = nullptr;
 
-    //static WiFiComm* _instance;
-    inline static WiFiComm* _instance = nullptr;
+    static WiFiComm* _instance;
 
     // ── Callback statique PubSubClient ───────────────────────────
     static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -75,8 +73,8 @@ public:
              const char* password,
              const char* brokerIp,
              uint16_t    brokerPort = 1883,
-             const char* topicPub   = "robot/telemetry",
-             const char* topicSub   = "robot/cmd")
+             const char* topicPub   = "robot/data",
+             const char* topicSub   = "robot/commande")
         : _ssid(ssid)
         , _password(password)
         , _brokerIp(brokerIp)
@@ -128,8 +126,4 @@ public:
     }
 };
 
-<<<<<<< HEAD
-//WiFiComm* WiFiComm::_instance = nullptr;
-=======
 inline WiFiComm* WiFiComm::_instance = nullptr;
->>>>>>> origin/main
