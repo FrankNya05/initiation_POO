@@ -17,7 +17,7 @@
 //
 //  Capteurs utilisés :
 //  - LineSensors FRONT_LEFT / FRONT_RIGHT / BACK → bords
-//  - IMU ax/ay                                  → détection d'impact
+//  - IMU ay/az                                  → détection d'impact
 //  - TOF FRONT_LEFT / FRONT_RIGHT               → détection rapprochée
 //  - Lidar FRONT                                → distance + angle ennemi
 // ═══════════════════════════════════════════════════════════════
@@ -25,11 +25,41 @@
 class AdamantineStrategy : public StrategyInterface {
 public:
 
-    const char* name() const override { return "Adamantine"; }
+    const char* name()  const override { return "Adamantine"; }
+    LedColor    color() const override { return LedColor::CYAN; }
 
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
 
         using AC = RobotConstants::ActionCommand;
+        ctx.setLidarEnabled(true);
+
+        // ── 0. EVADE verrouillé — durée minimale garantie ─────
+        uint32_t now = millis();
+        if (now < _evadeUntil) {
+            ctx.setState(RobotConstants::State::EVADE);
+            return _evadeCmd;
+        }
+
+        // ── 0b. Retour au centre après évitement ──────────────
+        // Une fois l'évitement terminé, on pousse vers le centre
+        // pendant RECENTER_MS avant de reprendre la stratégie.
+        if (_recentering) {
+            EKF::Pose pose = ctx.getPose();
+            float dist = sqrtf(pose.x * pose.x + pose.y * pose.y);
+            if (dist < RECENTER_STOP_MM || now > _recenterUntil) {
+                _recentering = false;
+            } else {
+                ctx.setState(RobotConstants::State::EVADE);
+                float angleToCenter = atan2f(-pose.y, -pose.x);
+                float diff = angleToCenter - pose.theta;
+                while (diff >  M_PI) diff -= 2.0f * M_PI;
+                while (diff < -M_PI) diff += 2.0f * M_PI;
+                float diffNorm = constrain(diff / M_PI, -1.0f, 1.0f);
+                int l = constrain((int)(SPEED_EVADE * (1.0f + diffNorm)), -255, 255);
+                int r = constrain((int)(SPEED_EVADE * (1.0f - diffNorm)), -255, 255);
+                return AC{ l, r };
+            }
+        }
 
         // ── 1. Bords — priorité absolue ───────────────────────
         SensorData lineFL = ctx.getLineData(SensorPosition::FRONT_LEFT);
@@ -40,32 +70,28 @@ public:
         bool fr = lineFR.isValid && lineFR.value.scalar > 0.0f;
         bool b  = lineB.isValid  && lineB.value.scalar  > 0.0f;
 
-        if (b) {
-            // Bord arrière → avancer et pivoter vers le centre
+        if (b || fl || fr) {
+            _evadeUntil  = now + EVADE_MIN_MS;
+            _justEvaded  = true;   // activera le recentrage après l'évitement
+            _recentering = false;
+            if (b) { _evadeCmd = AC{  SPEED_CHARGE,  SPEED_CHARGE }; }
+            else   { _evadeCmd = AC{ -SPEED_EVADE,  -SPEED_EVADE }; }  // recul droit dans tous les cas
             ctx.setState(RobotConstants::State::EVADE);
-            return AC{ SPEED_CHARGE, SPEED_CHARGE };
+            return _evadeCmd;
         }
-        if (fl && fr) {
-            // Les deux capteurs avant → reculer droit
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_EVADE, -SPEED_EVADE };
-        }
-        if (fl) {
-            // Bord avant-gauche → reculer en virant à droite
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_EVADE, -SPEED_SLOW };
-        }
-        if (fr) {
-            // Bord avant-droit → reculer en virant à gauche
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_SLOW, -SPEED_EVADE };
+
+        // Sortie d'évitement → activer le retour au centre
+        if (_justEvaded) {
+            _justEvaded    = false;
+            _recentering   = true;
+            _recenterUntil = now + RECENTER_MS;
         }
 
         // ── 2. Impact IMU — choc détecté → repositionnement ───
         SensorData imu = ctx.getIMUData();
         if (imu.isValid) {
-            float impact = sqrtf(imu.value.imu.ax * imu.value.imu.ax
-                               + imu.value.imu.ay * imu.value.imu.ay);
+            float impact = sqrtf(imu.value.imu.ay * imu.value.imu.ay
+                               + imu.value.imu.az * imu.value.imu.az);
             if (impact > IMPACT_THRESHOLD_G) {
                 // Choc ! Le robot est en train d'être repoussé
                 // → reculer et pivoter pour changer d'angle d'approche
@@ -83,24 +109,13 @@ public:
         SensorData tofFL = ctx.getTOFData(SensorPosition::FRONT_LEFT);
         SensorData tofFR = ctx.getTOFData(SensorPosition::FRONT_RIGHT);
 
-        bool tofCloseL = tofFL.isValid && tofFL.value.scalar < TOF_CLOSE_MM;
-        bool tofCloseR = tofFR.isValid && tofFR.value.scalar < TOF_CLOSE_MM;
+        bool tofCloseL = tofFL.isValid && tofFL.value.scalar > TOF_MIN_MM && tofFL.value.scalar < TOF_CLOSE_MM;
+        bool tofCloseR = tofFR.isValid && tofFR.value.scalar > TOF_MIN_MM && tofFR.value.scalar < TOF_CLOSE_MM;
 
-        // ── 4. (anciennement 2.) TOF
+        // ── 4. TOF — les deux capteurs doivent confirmer (évite faux positifs)
         if (tofCloseL && tofCloseR) {
-            // Ennemi droit devant très près → reculer puis pivoter
             ctx.setState(RobotConstants::State::EVADE);
             return AC{ -SPEED_EVADE, -SPEED_EVADE };
-        }
-        if (tofCloseL) {
-            // Ennemi très proche à gauche → reculer en virant à droite
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_SLOW, -SPEED_EVADE };
-        }
-        if (tofCloseR) {
-            // Ennemi très proche à droite → reculer en virant à gauche
-            ctx.setState(RobotConstants::State::EVADE);
-            return AC{ -SPEED_EVADE, -SPEED_SLOW };
         }
 
         // ── 3. Lidar — analyse de la distance ennemi ──────────
@@ -114,13 +129,16 @@ public:
             if (dist < LIDAR_CLOSE_M) {
                 ctx.setState(RobotConstants::State::ATTACK);
 
-                if (angle <= FRONT_ANGLE || angle >= (360.0f - FRONT_ANGLE)) {
-                    return AC{ SPEED_CHARGE, SPEED_CHARGE };
-                }
-                if (angle < 180.0f) {
-                    return AC{ SPEED_CHARGE, SPEED_TURN };
-                }
-                return AC{ SPEED_TURN, SPEED_CHARGE };
+                // Lidar 0° = arrière robot, 180° = avant robot
+                float diff = angle - 180.0f;
+                if (diff >  180.0f) diff -= 360.0f;
+                if (diff < -180.0f) diff += 360.0f;
+
+                // Steering proportionnel : diff normalisé -1..+1
+                float diffNorm = constrain(diff / 180.0f, -1.0f, 1.0f);
+                int l = constrain((int)(SPEED_CHARGE * (1.0f + diffNorm)), -255, 255);
+                int r = constrain((int)(SPEED_CHARGE * (1.0f - diffNorm)), -255, 255);
+                return AC{ l, r };
             }
 
             // Ennemi à distance moyenne → recul latéral pour esquiver
@@ -133,18 +151,45 @@ public:
             }
         }
 
-        // ── 4. Rien détecté → rotation lente de surveillance ──
+        // ── 5. EKF — anticiper le bord si trop loin du centre ──
+        EKF::Pose pose = ctx.getPose();
+        float distCentre = sqrtf(pose.x * pose.x + pose.y * pose.y);
+        if (distCentre > EDGE_WARN_MM) {
+            ctx.setState(RobotConstants::State::EVADE);
+            float angleToCenter = atan2f(-pose.y, -pose.x);
+            float diff = angleToCenter - pose.theta;
+            while (diff >  M_PI) diff -= 2.0f * M_PI;
+            while (diff < -M_PI) diff += 2.0f * M_PI;
+            if (fabsf(diff) <= 0.35f) return AC{ SPEED_CHARGE, SPEED_CHARGE };
+            return diff > 0 ? AC{ SPEED_TURN, SPEED_CHARGE }
+                            : AC{ SPEED_CHARGE, SPEED_TURN };
+        }
+
+        // ── 6. Rien détecté → rotation lente de surveillance ──
         ctx.setState(RobotConstants::State::SEARCH);
         return AC{ SPEED_PATROL, -SPEED_PATROL };
     }
 
 private:
+    // ── EVADE verrouillé ─────────────────────────────────────
+    uint32_t                       _evadeUntil = 0;
+    RobotConstants::ActionCommand  _evadeCmd   = {0, 0};
+    static constexpr uint32_t      EVADE_MIN_MS = 500;
+
+    // ── Retour au centre après évitement ─────────────────────
+    bool     _justEvaded    = false;
+    bool     _recentering   = false;
+    uint32_t _recenterUntil = 0;
+    static constexpr uint32_t RECENTER_MS      = 600;   // durée max du retour au centre
+    static constexpr float    RECENTER_STOP_MM = 100.0f; // arrêt si déjà proche du centre
+
     // ── Seuils ────────────────────────────────────────────────
-    static constexpr float IMPACT_THRESHOLD_G = 2.0f;  // seuil choc IMU (m/s² ≈ 2g)
-    static constexpr float TOF_CLOSE_MM      = 150.0f; // TOF : très proche (mm)
-    static constexpr float LIDAR_CLOSE_M =   0.50f; // Lidar : contre-attaque (m)
-    static constexpr float LIDAR_MID_M   =   0.90f; // Lidar : recul latéral (m)
-    static constexpr float FRONT_ANGLE   =  20.0f;  // tolérance alignement (°)
+    static constexpr float IMPACT_THRESHOLD_G = 3.0f;    // seuil choc IMU dynamique ay/az (m/s²)
+    static constexpr float TOF_MIN_MM        = 350.0f;  // ignore les lectures < 350mm (sol/structure)
+    static constexpr float TOF_CLOSE_MM      = 450.0f;  // TOF : contact imminent (mm)
+    static constexpr float LIDAR_CLOSE_M     =   0.35f; // Lidar : contre-attaque (m)
+    static constexpr float LIDAR_MID_M       =   0.55f; // Lidar : orienter vers ennemi (m)
+    static constexpr float EDGE_WARN_MM      = 295.0f;  // EKF : > 295mm du centre → retour (cercle noir r=385mm, robot r=50mm → limite=335mm)
 
     // ── Vitesses ──────────────────────────────────────────────
     static constexpr int SPEED_CHARGE =  255;  // contre-attaque pleine puissance

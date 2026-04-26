@@ -15,9 +15,6 @@ public:
     const char* typeId() const override { return TYPE_ID; }
 
     bool init() override {
-        Wire.begin(TOF_SDA, TOF_SCL);
-        Wire.setClock(400000);
-
         Wire.beginTransmission(_config.addr);
         if (Wire.endTransmission() != 0) {
             Serial.printf("[TOFSensor] Capteur introuvable à 0x%02X\n", _config.addr);
@@ -64,6 +61,6 @@ private:
 
         int32_t raw = (int32_t)(d[0] | (d[1] << 8) | (d[2] << 16));
         if (raw & 0x800000) raw |= 0xFF000000;
-        return raw / 1000.0f;
+        return raw / 1.0f;
     }
 };

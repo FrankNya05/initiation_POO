@@ -5,7 +5,7 @@
  */
 
 #include "IMUSensor.hpp"
-
+#include "RTOSConfig.hpp"
 // ─────────────────────────────────────────────
 //  Constructeur
 // ─────────────────────────────────────────────
@@ -25,7 +25,7 @@ bool IMUSensor::init() {
     // Tente de démarrer la communication I2C avec le MPU6050.
     // begin() retourne false si le capteur ne répond pas.
     if (!_mpu.begin()) {
-        Serial.println("[IMUSensor] MPU6050 introuvable sur le bus I2C.");
+        LOG("[IMUSensor] MPU6050 introuvable sur le bus I2C.");
         return false;
     }
 
@@ -39,7 +39,30 @@ bool IMUSensor::init() {
     // causé par les vibrations des moteurs
     _mpu.setFilterBandwidth(IMUConfig::FILTER_BW);
 
-    Serial.println("[IMUSensor] MPU6050 initialisé avec succès.");
+    // Mesure du biais statique du gyroscope axe X (axe lacet du robot).
+    // Le MPU6050 n'a pas d'auto-calibration — on mesure la dérive à
+    // l'arrêt et on la soustrait dans update(). Robot immobile, moteurs
+    // éteints pendant les ~200 ms de cette mesure.
+    {
+        constexpr int    N   = 200;
+        constexpr int    DLY = 1;   // ms entre échantillons → ~200 ms total
+        double sumGx = 0.0, sumAy = 0.0, sumAz = 0.0;
+        sensors_event_t a, g, t;
+        for (int i = 0; i < N; i++) {
+            _mpu.getEvent(&a, &g, &t);
+            sumGx += g.gyro.x * RAD_TO_DEG;
+            sumAy += a.acceleration.y;
+            sumAz += a.acceleration.z;
+            delay(DLY);
+        }
+        _gxBias = (float)(sumGx / N);
+        _ayBias = (float)(sumAy / N);
+        _azBias = (float)(sumAz / N);
+        Serial.printf("[IMUSensor] Biais gx=%+.3f deg/s  ay=%+.3f m/s²  az=%+.3f m/s²\n",
+                      _gxBias, _ayBias, _azBias);
+    }
+
+    LOG("[IMUSensor] MPU6050 initialisé avec succès.");
     return true;
 }
 
@@ -59,14 +82,14 @@ bool IMUSensor::update() {
 
     // Remplit le membre imu de l'union SensorValue.
     // ax/ay/az en m/s², gx/gy/gz en °/s (rad/s natif Adafruit → °/s).
-    _data.value.imu.ax = accel.acceleration.x;
-    _data.value.imu.ay = accel.acceleration.y;
-    _data.value.imu.az = accel.acceleration.z;
+    _data.value.imu.ax = accel.acceleration.x;           // axe gravité — non corrigé
+    _data.value.imu.ay = accel.acceleration.y - _ayBias; // biais statique retiré
+    _data.value.imu.az = accel.acceleration.z - _azBias; // biais statique retiré
 
     // Note : Adafruit retourne le gyroscope en rad/s.
     // On convertit en °/s pour une utilisation plus intuitive
     // dans le contexte de l'asservissement du robot.
-    _data.value.imu.gx = gyro.gyro.x * RAD_TO_DEG;
+    _data.value.imu.gx = gyro.gyro.x * RAD_TO_DEG - _gxBias;
     _data.value.imu.gy = gyro.gyro.y * RAD_TO_DEG;
     _data.value.imu.gz = gyro.gyro.z * RAD_TO_DEG;
 

@@ -33,6 +33,9 @@ enum class CommandType : uint8_t {
     PID_KP,
     PID_KI,
     PID_KD,
+    PID_YAW_KP,
+    PID_YAW_KI,
+    PID_YAW_KD,
     LED,
     SEQUENCE
 };
@@ -95,6 +98,18 @@ inline RobotCommand parseCommand(const char* raw) {
             cmd.motorLeft  = l;
             cmd.motorRight = r;
         }
+    }
+    else if (strncmp(raw, "PID:YAW:KP:", 11) == 0) {
+        cmd.type     = CommandType::PID_YAW_KP;
+        cmd.pidValue = atof(raw + 11);
+    }
+    else if (strncmp(raw, "PID:YAW:KI:", 11) == 0) {
+        cmd.type     = CommandType::PID_YAW_KI;
+        cmd.pidValue = atof(raw + 11);
+    }
+    else if (strncmp(raw, "PID:YAW:KD:", 11) == 0) {
+        cmd.type     = CommandType::PID_YAW_KD;
+        cmd.pidValue = atof(raw + 11);
     }
     else if (strncmp(raw, "PID:KP:", 7) == 0) {
         cmd.type     = CommandType::PID_KP;

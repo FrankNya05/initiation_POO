@@ -10,7 +10,7 @@
 //
 //  Sources de mesure fusionnées :
 //  - Encodeurs (odométrie différentielle) → prédiction
-//  - IMU gz (gyroscope Z)                → correction du cap
+//  - IMU gx (gyroscope X = axe lacet)    → correction du cap
 //
 //  Paramètres robot (depuis RobotConstants.hpp) :
 //  - Diamètre roue    : WHEEL_DIAMETER_MM  (30 mm)
@@ -46,12 +46,9 @@ public:
 
     // ── Prédiction — odométrie encodeurs ─────────────────────
     //  Appeler à chaque cycle taskEncoders (200 Hz)
-    //  @param pulsesLeft   impulsions encodeur gauche (signées, remises à 0 après)
-    //  @param pulsesRight  impulsions encodeur droit  (signées, remises à 0 après)
-    void predict(int32_t pulsesLeft, int32_t pulsesRight) {
-
-        const float dl     = pulsesLeft  * MM_PER_PULSE;
-        const float dr     = pulsesRight * MM_PER_PULSE;
+    //  @param dl  distance roue gauche en mm (signée)
+    //  @param dr  distance roue droite en mm (signée)
+    void predict(float dl, float dr) {
         const float d      = (dl + dr) * 0.5f;
         const float dTheta = (dr - dl) / WHEELBASE;
         const float midTheta = _theta + dTheta * 0.5f;
@@ -85,10 +82,10 @@ public:
 
     // ── Mise à jour — gyroscope IMU ───────────────────────────
     //  Appeler à chaque cycle taskSensors (50 Hz)
-    //  @param gz    vitesse angulaire Z en rad/s
-    //  @param dtSec intervalle de temps en secondes
-   void updateIMU(float gz, float dtSec) {
-    const float zMeasured = gz * dtSec;
+    //  @param gyroRate  vitesse angulaire gx (lacet) en rad/s — signe : CCW > 0
+    //  @param dtSec     intervalle de temps en secondes
+    void updateIMU(float gyroRate, float dtSec) {
+    const float zMeasured = gyroRate * dtSec;
     // Calcul de la variation d'angle vue par les encodeurs
     float dThetaEncoder = _theta - _thetaPrev;
     
@@ -103,9 +100,8 @@ public:
     _y     += K[1] * innovation;
     _theta  = _wrapAngle(_theta + K[2] * innovation);
 
-    // Mise à jour de la covariance P = (I - KH)P
+    // Mise à jour de la covariance P = (I - KH)P  avec H = [0,0,1]
     for (int i = 0; i < 3; i++) {
-        float row2 = _cov[2][i]; // H est [0, 0, 1]
         _cov[i][0] -= K[i] * _cov[2][0];
         _cov[i][1] -= K[i] * _cov[2][1];
         _cov[i][2] -= K[i] * _cov[2][2];
@@ -134,10 +130,7 @@ private:
     float _qTheta = 0.1f;   // bruit processus cap       (rad²/rad tourné)
     float _rIMU   = 0.01f;  // bruit mesure gyroscope    (rad²)
 
-    static constexpr float WHEEL_DIAMETER = RobotConstants::WHEEL_DIAMETER_MM;
-    static constexpr float WHEELBASE      = RobotConstants::WHEELBASE_MM;
-    static constexpr float PULSES_PER_REV = static_cast<float>(RobotConstants::PULSES_PER_REV);
-    static constexpr float MM_PER_PULSE   = (3.14159f * WHEEL_DIAMETER) / PULSES_PER_REV;
+    static constexpr float WHEELBASE = RobotConstants::WHEELBASE_MM;
 
     static float _wrapAngle(float a) {
         while (a >  3.14159f) a -= 2.0f * 3.14159f;

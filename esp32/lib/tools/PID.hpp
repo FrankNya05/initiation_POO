@@ -65,7 +65,8 @@ public:
 
         // Intégral avec anti-windup (clamping)
         _integral += error * dt;
-        _integral  = _clamp(_integral, _minOut / _ki, _maxOut / _ki);
+        if (_ki > 1e-9f)
+            _integral = _clamp(_integral, _minOut / _ki, _maxOut / _ki);
         const float I = _ki * _integral;
 
         // Dérivé sur la mesure (évite le "derivative kick" sur changement de consigne)

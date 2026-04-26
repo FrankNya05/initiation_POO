@@ -1,5 +1,6 @@
 #pragma once
 #include "RobotConstants.hpp"
+#include "DriverLedRGB.hpp"
 
 // ═══════════════════════════════════════════════════════════════
 //  StrategyInterface.hpp — Interface abstraite des stratégies
@@ -27,9 +28,10 @@ public:
     //  Reçoit l'état complet du robot, retourne une commande moteur.
     //  Appelée par StrategyManager::executeStrategy() depuis taskStrategy.
     virtual RobotConstants::ActionCommand execute(RobotContext& ctx) = 0;
-  
 
     // ── Nom de la stratégie ───────────────────────────────────
-    //  Utilisé pour le debug et le LOG.
     virtual const char* name() const = 0;
+
+    // ── Couleur LED associée ──────────────────────────────────
+    virtual LedColor color() const = 0;
 };

@@ -12,7 +12,7 @@ void setup() {
     }
     for (size_t i = 0; i < 254; i++)
     {
-       motor.setSpeed(200, i);
+       motor.setSpeed(200,200);
        delay(100);
     }
     motor.stop();

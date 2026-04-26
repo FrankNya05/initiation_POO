@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "driver/uart.h"
 #include "SensorsInterface.hpp"
 #include "PinConfig.hpp"
 #include "RTOSConfig.hpp"
@@ -24,6 +25,14 @@ namespace LidarProtocol {
 
     constexpr uint32_t TOUR_MS = 150;
     constexpr uint32_t STARTUP_DELAY_MS = 100;
+
+    // Correction d'orientation de montage (0° physique lidar → décalage mesuré)
+    // Objet en face (devrait être 180°) apparaît à ~97° → offset = +83°
+    constexpr float MOUNT_OFFSET_DEG = 83.0f;
+
+    // Zone morte — châssis du robot bloque le scan autour de 0° (coordonnées corrigées)
+    constexpr float BLIND_CENTER_DEG =   0.0f;  // centre de la zone masquée (arrière robot)
+    constexpr float BLIND_HALF_DEG   =  80.0f;  // ±80° autour de 0° ignorés
 }
 
 class LidarSensor : public SensorsInterface {
@@ -45,51 +54,72 @@ public:
         , _started(false)
         , _nearestDist(LidarProtocol::MAX_DIST_M)
         , _nearestAngle(0)
-        , _filteredDist(LidarProtocol::MAX_DIST_M)
-        , _filteredAngle(0)
         , _validPoints(0)
         , _lastResetMs(0)
+        , _uartQueue(nullptr)
     {}
 
     bool init() override {
-
-        Serial2.setRxBufferSize(4096);
-
-        Serial2.begin(
-            230400,
-            SERIAL_8N1,
-            RobotConfig::RX_LIDAR,
-            RobotConfig::TX_LIDAR
-        );
+        const uart_config_t cfg = {
+            .baud_rate  = 230400,
+            .data_bits  = UART_DATA_8_BITS,
+            .parity     = UART_PARITY_DISABLE,
+            .stop_bits  = UART_STOP_BITS_1,
+            .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
+            .rx_flow_ctrl_thresh = 0,
+            .source_clk = UART_SCLK_APB,
+        };
+        uart_param_config(UART_NUM_2, &cfg);
+        uart_set_pin(UART_NUM_2,
+                     RobotConfig::TX_LIDAR, RobotConfig::RX_LIDAR,
+                     UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        uart_driver_install(UART_NUM_2, 4096, 0, 20, &_uartQueue, 0);
 
         _startupTime = millis();
         _started = false;
 
-        LOG("[LidarSensor] FreeRTOS Ready Init");
-
+        LOG("[LidarSensor] ESP-IDF UART DMA Init");
         return true;
     }
 
+    // Non-blocking: vide le ring buffer sans attendre (garde la compatibilité SensorsInterface).
     bool update() override {
-
         _handleStartup();
-
         bool gotPacket = false;
-
-        while (Serial2.available()) {
-
-            _processByte(Serial2.read());
-
+        uint8_t buf[128];
+        int len = uart_read_bytes(UART_NUM_2, buf, sizeof(buf), 0);
+        for (int i = 0; i < len; i++) {
+            _processByte(buf[i]);
             if (_packetReady) {
                 _parsePacket();
                 _packetReady = false;
                 gotPacket = true;
             }
         }
-
         _publishData();
-
         return gotPacket;
+    }
+
+    // Bloquant : réveille la tâche dès qu'un événement UART arrive (interrupt/DMA → queue).
+    bool waitAndProcess(TickType_t timeout = pdMS_TO_TICKS(20)) {
+        _handleStartup();
+        uart_event_t event;
+        if (!xQueueReceive(_uartQueue, &event, timeout))
+            return false;
+        if (event.type != UART_DATA)
+            return false;
+        uint8_t buf[256];
+        int len = uart_read_bytes(UART_NUM_2, buf,
+                                  min((size_t)event.size, sizeof(buf)), 0);
+        for (int i = 0; i < len; i++) {
+            _processByte(buf[i]);
+            if (_packetReady) {
+                _parsePacket();
+                _packetReady = false;
+            }
+        }
+        _publishData();
+        return true;
     }
 
     SensorData getData() const override {
@@ -97,8 +127,8 @@ public:
     }
 
     void stop() {
-        Serial2.write(LidarProtocol::CMD_PREFIX);
-        Serial2.write(LidarProtocol::CMD_STOP);
+        const uint8_t cmd[] = { LidarProtocol::CMD_PREFIX, LidarProtocol::CMD_STOP };
+        uart_write_bytes(UART_NUM_2, cmd, sizeof(cmd));
     }
 
 private:
@@ -145,12 +175,11 @@ private:
     float _nearestDist;
     float _nearestAngle;
 
-    float _filteredDist;
-    float _filteredAngle;
-
     int _validPoints;
 
     uint32_t _lastResetMs;
+
+    QueueHandle_t _uartQueue;
 
     SensorData _data;
 
@@ -168,8 +197,8 @@ private:
 
         if (millis() - _startupTime > LidarProtocol::STARTUP_DELAY_MS) {
 
-            Serial2.write(LidarProtocol::CMD_PREFIX);
-            Serial2.write(LidarProtocol::CMD_START);
+            const uint8_t cmd[] = { LidarProtocol::CMD_PREFIX, LidarProtocol::CMD_START };
+            uart_write_bytes(UART_NUM_2, cmd, sizeof(cmd));
 
             _started = true;
 
@@ -305,11 +334,9 @@ private:
     // ─────────────────────────────────────────────
     void _resetScan() {
 
-        _nearestDist   = LidarProtocol::MAX_DIST_M;
-        _nearestAngle  = 0;
-        _filteredDist  = LidarProtocol::MAX_DIST_M;
-        _filteredAngle = 0;
-        _validPoints   = 0;
+        _nearestDist  = LidarProtocol::MAX_DIST_M;
+        _nearestAngle = 0;
+        _validPoints  = 0;
     }
 
     // ─────────────────────────────────────────────
@@ -371,36 +398,24 @@ private:
                 dist > LidarProtocol::MAX_DIST_M)
                 continue;
 
+            float angle = angleStart + i * angleStep;
+            angle += LidarProtocol::MOUNT_OFFSET_DEG;
+            if (angle >= 360.0f) angle -= 360.0f;
+
+            // Rejeter les points dans la zone morte (châssis, coordonnées corrigées)
+            float aDiff = angle - LidarProtocol::BLIND_CENTER_DEG;
+            if (aDiff >  180.0f) aDiff -= 360.0f;
+            if (aDiff < -180.0f) aDiff += 360.0f;
+            if (fabsf(aDiff) <= LidarProtocol::BLIND_HALF_DEG) continue;
+
             _validPoints++;
 
             if (dist < _nearestDist) {
-
-                _nearestDist = dist;
-                _nearestAngle = angleStart + i * angleStep;
-
-                if (_nearestAngle >= 360)
-                    _nearestAngle -= 360;
+                _nearestDist  = dist;
+                _nearestAngle = angle;
             }
         }
 
         _validPoints = min(_validPoints, 250);
-
-        // Fix 3 : EMA uniquement si des points valides ont été trouvés
-        if (_validPoints > 0) {
-
-            // Fix 2 : EMA distance (linéaire, pas de problème circulaire)
-            _filteredDist = 0.7f * _filteredDist + 0.3f * _nearestDist;
-
-            // Fix 2 : EMA angle circulaire — évite le bug autour de 0°/360°
-            float diff = _nearestAngle - _filteredAngle;
-            if (diff >  180.0f) diff -= 360.0f;
-            if (diff < -180.0f) diff += 360.0f;
-            _filteredAngle += 0.3f * diff;
-            if (_filteredAngle <   0.0f) _filteredAngle += 360.0f;
-            if (_filteredAngle >= 360.0f) _filteredAngle -= 360.0f;
-
-            _nearestDist  = _filteredDist;
-            _nearestAngle = _filteredAngle;
-        }
     }
 }; // end class LidarSensor
