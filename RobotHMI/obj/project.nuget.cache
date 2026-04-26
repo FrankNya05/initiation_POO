@@ -1,19 +1,23 @@
 {
   "version": 2,
-  "dgSpecHash": "B7qLgcKSTTUDM5ZCJzY9T75FN2XTvTFUmGqGkjSfrewxGjxKGOAewKAbuGqgpUpZlsN5tvpXGSsYFHvvnfo39g==",
+  "dgSpecHash": "DpM4j+lP8Oui5qCbSMYiRkKbDif6mMKCOlD5qhGRqnrVfFm6Kb32s6h8vx8UyUMyRufVCZ2PKh2a8OSus7c5Ug==",
   "success": true,
   "projectFilePath": "C:\\GEI_1076_Labs\\initiation_POO\\RobotHMI\\RobotHMI.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\arman\\.nuget\\packages\\avalonia\\11.1.0\\avalonia.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.angle.windows.natives\\2.1.22045.20230930\\avalonia.angle.windows.natives.2.1.22045.20230930.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.buildservices\\0.0.29\\avalonia.buildservices.0.0.29.nupkg.sha512",
+    "C:\\Users\\arman\\.nuget\\packages\\avalonia.controls.colorpicker\\11.1.0\\avalonia.controls.colorpicker.11.1.0.nupkg.sha512",
+    "C:\\Users\\arman\\.nuget\\packages\\avalonia.controls.datagrid\\11.1.0\\avalonia.controls.datagrid.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.desktop\\11.1.0\\avalonia.desktop.11.1.0.nupkg.sha512",
+    "C:\\Users\\arman\\.nuget\\packages\\avalonia.diagnostics\\11.1.0\\avalonia.diagnostics.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.fonts.inter\\11.1.0\\avalonia.fonts.inter.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.freedesktop\\11.1.0\\avalonia.freedesktop.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.native\\11.1.0\\avalonia.native.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.remote.protocol\\11.1.0\\avalonia.remote.protocol.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.skia\\11.1.0\\avalonia.skia.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.themes.fluent\\11.1.0\\avalonia.themes.fluent.11.1.0.nupkg.sha512",
+    "C:\\Users\\arman\\.nuget\\packages\\avalonia.themes.simple\\11.1.0\\avalonia.themes.simple.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.win32\\11.1.0\\avalonia.win32.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\avalonia.x11\\11.1.0\\avalonia.x11.11.1.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\harfbuzzsharp\\7.3.0.2\\harfbuzzsharp.7.3.0.2.nupkg.sha512",
@@ -32,8 +36,7 @@
     "C:\\Users\\arman\\.nuget\\packages\\system.numerics.vectors\\4.5.0\\system.numerics.vectors.4.5.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\system.text.encodings.web\\8.0.0\\system.text.encodings.web.8.0.0.nupkg.sha512",
     "C:\\Users\\arman\\.nuget\\packages\\system.text.json\\8.0.0\\system.text.json.8.0.0.nupkg.sha512",
-    "C:\\Users\\arman\\.nuget\\packages\\tmds.dbus.protocol\\0.16.0\\tmds.dbus.protocol.0.16.0.nupkg.sha512",
-    "C:\\Users\\arman\\.nuget\\packages\\microsoft.netcore.app.host.linux-arm64\\8.0.0\\microsoft.netcore.app.host.linux-arm64.8.0.0.nupkg.sha512"
+    "C:\\Users\\arman\\.nuget\\packages\\tmds.dbus.protocol\\0.16.0\\tmds.dbus.protocol.0.16.0.nupkg.sha512"
   ],
   "logs": [
     {
@@ -43,8 +46,7 @@
       "message": "RobotHMI depends on MQTTnet (>= 4.3.3) but MQTTnet 4.3.3 was not found. An approximate best match of MQTTnet 4.3.3.952 was resolved.",
       "libraryId": "MQTTnet",
       "targetGraphs": [
-        "net8.0",
-        "net8.0/linux-arm64"
+        "net8.0"
       ]
     },
     {
@@ -54,8 +56,7 @@
       "message": "Package 'System.Text.Json' 8.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-8g4q-xg66-9fp4",
       "libraryId": "System.Text.Json",
       "targetGraphs": [
-        "net8.0",
-        "net8.0/linux-arm64"
+        "net8.0"
       ]
     },
     {
@@ -65,8 +66,7 @@
       "message": "Package 'System.Text.Json' 8.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-hh2w-p6rv-4g7w",
       "libraryId": "System.Text.Json",
       "targetGraphs": [
-        "net8.0",
-        "net8.0/linux-arm64"
+        "net8.0"
       ]
     }
   ]

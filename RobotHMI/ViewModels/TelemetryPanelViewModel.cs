@@ -132,8 +132,8 @@ public class TelemetryPanelViewModel : ViewModelBase
     // ── Radar ─────────────────────────────────────────────────────────────
 
     public const double RadarCanvasWidth  = 400;
-    public const double RadarCanvasHeight = 300;
-    private const double MaxRadarDist = 2.0;
+    public const double RadarCanvasHeight = 400;  // Carré pour un cercle complet
+    private const double MaxRadarDist = 0.5;      // Arène 77cm — affichage limité à 0.5m
 
     private double _radarDotLeft = -50;
     public double RadarDotLeft
@@ -151,8 +151,9 @@ public class TelemetryPanelViewModel : ViewModelBase
 
     private void UpdateRadarPosition()
     {
-        double cx = RadarCanvasWidth / 2.0;
-        double cy = RadarCanvasHeight - 20;
+        // Robot au centre exact du canvas — cercle complet 360°
+        double cx = RadarCanvasWidth  / 2.0;  // 200
+        double cy = RadarCanvasHeight / 2.0;  // 200
 
         if (!LidarValid || LidarDist <= 0)
         {
@@ -161,10 +162,14 @@ public class TelemetryPanelViewModel : ViewModelBase
             return;
         }
 
+        // Normaliser — au-delà de MaxRadarDist on clamp au bord
         double distNorm  = Math.Min(LidarDist / MaxRadarDist, 1.0);
-        double pixelDist = distNorm * (RadarCanvasHeight - 30);
-        double angleRad  = LidarAngle * Math.PI / 180.0;
+        // Rayon utile = 190px (laisse une marge de 10px par rapport au bord)
+        double pixelDist = distNorm * 190.0;
 
+        // Convention lidar : 0° = avant du robot (haut du canvas)
+        // Avalonia : Y augmente vers le bas → on soustrait pour aller vers le haut
+        double angleRad = LidarAngle * Math.PI / 180.0;
         RadarDotLeft = cx + pixelDist * Math.Sin(angleRad) - 8;
         RadarDotTop  = cy - pixelDist * Math.Cos(angleRad) - 8;
     }
