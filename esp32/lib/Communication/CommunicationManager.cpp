@@ -98,14 +98,6 @@ CommChannel CommunicationManager::activeChannel() const {
 // ============================================================================
 
 void CommunicationManager::begin() {
-<<<<<<< HEAD
-    // Apply transport callbacks before connecting so they fire correctly.
-    if (connect_callback_)    wifi_->onConnect(connect_callback_);
-    if (disconnect_callback_) wifi_->onDisconnect(disconnect_callback_);
-
-    // Connect to WiFi and MQTT (blocking until success or timeout).
-    wifi_->begin();
-=======
     Serial.println("[CommManager] Initializing BLE channel...");
     ble_->begin();
 
@@ -116,7 +108,6 @@ void CommunicationManager::begin() {
 
     Serial.println("[CommManager] Initializing UART channel...");
     uart_->begin();
->>>>>>> origin/main
 
     // Initialize the secondary channel if present.
     // Its failure must not block the primary path.
