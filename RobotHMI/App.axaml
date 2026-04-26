@@ -3,29 +3,299 @@
              x:Class="RobotHMI.App"
              RequestedThemeVariant="Dark">
 
-    <!--
-        App.axaml
-        ══════════
-        Global Avalonia application declaration.
-        Theme, global styles, and resources go here.
-
-        Phase 1: dark theme only.
-        Future phases may add converters (BooleanToColorConverter, etc.)
-        as StaticResource entries in the ResourceDictionary below.
-    -->
-
+    <!-- MODIFIÉ V2 — Thème sombre industriel complet -->
     <Application.Styles>
         <FluentTheme />
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             Styles globaux — boutons, panneaux, typographie
+             ═══════════════════════════════════════════════════════════════ -->
+        <Style Selector="Window">
+            <Setter Property="Background" Value="#0F1923"/>
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial, sans-serif"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+        </Style>
+
+        <!-- Texte par défaut -->
+        <Style Selector="TextBlock">
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Bouton de base — fond neutre, tactile friendly
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Button">
+            <Setter Property="MinHeight" Value="50"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="Background" Value="#2A3F55"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3A5570"/>
+        </Style>
+
+        <Style Selector="Button:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#1A2F45"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Bouton START — vert, grand, bien visible
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Button.start-btn">
+            <Setter Property="Background" Value="#00E676"/>
+            <Setter Property="Foreground" Value="#0F1923"/>
+            <Setter Property="MinHeight" Value="80"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <Style Selector="Button.start-btn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#00FF88"/>
+        </Style>
+
+        <Style Selector="Button.start-btn:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#00C060"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Bouton STOP — rouge, grand
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Button.stop-btn">
+            <Setter Property="Background" Value="#FF1744"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="MinHeight" Value="80"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <Style Selector="Button.stop-btn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#FF4466"/>
+        </Style>
+
+        <Style Selector="Button.stop-btn:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#CC0030"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Bouton RESET — neutre, plus petit
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Button.reset-btn">
+            <Setter Property="Background" Value="#2A3F55"/>
+            <Setter Property="Foreground" Value="#78909C"/>
+            <Setter Property="MinHeight" Value="50"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Bouton stratégie — toggle exclusif
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Button.strategy-btn">
+            <Setter Property="Background" Value="#1C2B3A"/>
+            <Setter Property="Foreground" Value="#78909C"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#2A3F55"/>
+            <Setter Property="MinHeight" Value="50"/>
+            <Setter Property="MinWidth" Value="110"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- Stratégie active — surbrillance cyan -->
+        <Style Selector="Button.strategy-active">
+            <Setter Property="Background" Value="#00D4FF"/>
+            <Setter Property="Foreground" Value="#0F1923"/>
+            <Setter Property="BorderBrush" Value="#00D4FF"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Boutons du pad directionnel (onglet moteurs)
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Button.motor-btn">
+            <Setter Property="Background" Value="#1C2B3A"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#2A3F55"/>
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="MinWidth" Value="60"/>
+            <Setter Property="FontSize" Value="20"/>
+        </Style>
+
+        <Style Selector="Button.motor-stop-btn">
+            <Setter Property="Background" Value="#FF1744"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="MinWidth" Value="60"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Bouton connexion
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Button.connect-btn">
+            <Setter Property="Background" Value="#00E676"/>
+            <Setter Property="Foreground" Value="#0F1923"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <Style Selector="Button.disconnect-btn">
+            <Setter Property="Background" Value="#FF1744"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Panneau / carte
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="#1C2B3A"/>
+            <Setter Property="BorderBrush" Value="#2A3F55"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Titre de section
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="TextBlock.section-title">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#00D4FF"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Label secondaire
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#78909C"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Valeur numérique monospace (voltage, distance, etc.)
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="TextBlock.value-mono">
+            <Setter Property="FontFamily" Value="Consolas, Courier New, monospace"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Séparateur horizontal fin
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Separator">
+            <Setter Property="Background" Value="#2A3F55"/>
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Margin" Value="0,4,0,8"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             TabControl — navigation principale
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="TabControl">
+            <Setter Property="Background" Value="#0F1923"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+
+        <Style Selector="TabItem">
+            <Setter Property="Background" Value="#1C2B3A"/>
+            <Setter Property="Foreground" Value="#78909C"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Padding" Value="16,8"/>
+        </Style>
+
+        <Style Selector="TabItem:selected">
+            <Setter Property="Foreground" Value="#00D4FF"/>
+            <Setter Property="Background" Value="#0F1923"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             Slider
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="Slider">
+            <Setter Property="Foreground" Value="#00D4FF"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             TextBox — champs de saisie
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="#1C2B3A"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="BorderBrush" Value="#2A3F55"/>
+            <Setter Property="CaretBrush" Value="#00D4FF"/>
+        </Style>
+
+        <!-- ───────────────────────────────────────────────────────────────
+             ProgressBar — batterie
+             ─────────────────────────────────────────────────────────────── -->
+        <Style Selector="ProgressBar">
+            <Setter Property="Background" Value="#2A3F55"/>
+            <Setter Property="Foreground" Value="#00E676"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Height" Value="12"/>
+        </Style>
+
+        <Style Selector="ProgressBar.battery-critical">
+            <Setter Property="Foreground" Value="#FF1744"/>
+        </Style>
+
+        <!-- ListBox — logs -->
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="#0F1923"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+        </Style>
+
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="FontFamily" Value="Consolas, Courier New, monospace"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
     </Application.Styles>
 
     <Application.Resources>
-        <ResourceDictionary>
-            <!--
-                Phase 2+: add global converters here.
-                Example:
-                <local:BooleanToColorConverter x:Key="BoolToColor"/>
-            -->
-        </ResourceDictionary>
+        <!-- ═══════════════════════════════════════════════════════════════
+             Palette de couleurs — MODIFIÉ V2
+             Définies ici pour pouvoir y accéder depuis n'importe quelle Vue.
+             ═══════════════════════════════════════════════════════════════ -->
+
+        <!-- Fonds -->
+        <Color x:Key="ColorBgMain">#0F1923</Color>
+        <Color x:Key="ColorBgPanel">#1C2B3A</Color>
+        <Color x:Key="ColorBgBorder">#2A3F55</Color>
+
+        <!-- Accent / états -->
+        <Color x:Key="ColorAccent">#00D4FF</Color>
+        <Color x:Key="ColorSuccess">#00E676</Color>
+        <Color x:Key="ColorDanger">#FF1744</Color>
+        <Color x:Key="ColorWarning">#FF9100</Color>
+
+        <!-- Texte -->
+        <Color x:Key="ColorTextPrimary">#E0E0E0</Color>
+        <Color x:Key="ColorTextSecondary">#78909C</Color>
+
+        <!-- SolidColorBrush versions — pour usage direct dans les AXAML -->
+        <SolidColorBrush x:Key="BrushBgMain"      Color="{StaticResource ColorBgMain}"/>
+        <SolidColorBrush x:Key="BrushBgPanel"     Color="{StaticResource ColorBgPanel}"/>
+        <SolidColorBrush x:Key="BrushBgBorder"    Color="{StaticResource ColorBgBorder}"/>
+        <SolidColorBrush x:Key="BrushAccent"      Color="{StaticResource ColorAccent}"/>
+        <SolidColorBrush x:Key="BrushSuccess"     Color="{StaticResource ColorSuccess}"/>
+        <SolidColorBrush x:Key="BrushDanger"      Color="{StaticResource ColorDanger}"/>
+        <SolidColorBrush x:Key="BrushWarning"     Color="{StaticResource ColorWarning}"/>
+        <SolidColorBrush x:Key="BrushTextPrimary" Color="{StaticResource ColorTextPrimary}"/>
+        <SolidColorBrush x:Key="BrushTextSecondary" Color="{StaticResource ColorTextSecondary}"/>
     </Application.Resources>
 
 </Application>

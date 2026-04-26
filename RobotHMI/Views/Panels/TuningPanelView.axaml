@@ -1,0 +1,159 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RobotHMI.ViewModels"
+             x:Class="RobotHMI.Views.Panels.TuningPanelView"
+             x:DataType="vm:TuningPanelViewModel"
+             Background="#0F1923">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="16" Spacing="16" MaxWidth="600"
+                    HorizontalAlignment="Center">
+
+            <!-- PID MOTEURS -->
+            <Border Classes="card">
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="section-title" Text="PID MOTEURS (pidLeft + pidRight)"/>
+                    <Separator/>
+                    <TextBlock Foreground="#78909C" FontSize="12" TextWrapping="Wrap"
+                               Text="Gains appliques aux deux moteurs simultanement. Valeurs initiales : KP=1.2 / KI=0.05 / KD=0.02"/>
+
+                    <!-- KP -->
+                    <Border Background="#0F1923" CornerRadius="6" Padding="12">
+                        <Grid ColumnDefinitions="80,*,12,120">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="KP" FontFamily="Consolas, Courier New, monospace"
+                                           FontSize="20" FontWeight="Bold" Foreground="#00D4FF"/>
+                                <TextBlock Text="Proportionnel" Classes="label" FontSize="10"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Text="{Binding KpText}"
+                                     FontFamily="Consolas, Courier New, monospace" FontSize="16"
+                                     Watermark="ex: 1.2" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="3" Command="{Binding SendKpCommand}"
+                                    Background="#00D4FF" Foreground="#0F1923"
+                                    FontWeight="Bold" MinHeight="44"
+                                    HorizontalAlignment="Stretch" Content="Envoyer"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- KI -->
+                    <Border Background="#0F1923" CornerRadius="6" Padding="12">
+                        <Grid ColumnDefinitions="80,*,12,120">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="KI" FontFamily="Consolas, Courier New, monospace"
+                                           FontSize="20" FontWeight="Bold" Foreground="#00D4FF"/>
+                                <TextBlock Text="Integral" Classes="label" FontSize="10"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Text="{Binding KiText}"
+                                     FontFamily="Consolas, Courier New, monospace" FontSize="16"
+                                     Watermark="ex: 0.05" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="3" Command="{Binding SendKiCommand}"
+                                    Background="#00D4FF" Foreground="#0F1923"
+                                    FontWeight="Bold" MinHeight="44"
+                                    HorizontalAlignment="Stretch" Content="Envoyer"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- KD -->
+                    <Border Background="#0F1923" CornerRadius="6" Padding="12">
+                        <Grid ColumnDefinitions="80,*,12,120">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="KD" FontFamily="Consolas, Courier New, monospace"
+                                           FontSize="20" FontWeight="Bold" Foreground="#00D4FF"/>
+                                <TextBlock Text="Derive" Classes="label" FontSize="10"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Text="{Binding KdText}"
+                                     FontFamily="Consolas, Courier New, monospace" FontSize="16"
+                                     Watermark="ex: 0.02" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="3" Command="{Binding SendKdCommand}"
+                                    Background="#00D4FF" Foreground="#0F1923"
+                                    FontWeight="Bold" MinHeight="44"
+                                    HorizontalAlignment="Stretch" Content="Envoyer"/>
+                        </Grid>
+                    </Border>
+
+                </StackPanel>
+            </Border>
+
+            <!-- PID YAW (MODIFIE V2.3) -->
+            <Border Classes="card">
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="section-title" Text="PID CAP (pidYaw) - Correction angulaire"/>
+                    <Separator/>
+                    <TextBlock Foreground="#78909C" FontSize="12" TextWrapping="Wrap"
+                               Text="Gains du correcteur de cap utilisant le gyroscope. Valeurs initiales : KP=0.5 / KI=0.0 / KD=0.0"/>
+
+                    <!-- YAW KP -->
+                    <Border Background="#0F1923" CornerRadius="6" Padding="12">
+                        <Grid ColumnDefinitions="80,*,12,120">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="KP" FontFamily="Consolas, Courier New, monospace"
+                                           FontSize="20" FontWeight="Bold" Foreground="#FF9100"/>
+                                <TextBlock Text="Proportionnel" Classes="label" FontSize="10"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Text="{Binding YawKpText}"
+                                     FontFamily="Consolas, Courier New, monospace" FontSize="16"
+                                     Watermark="ex: 0.5" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="3" Command="{Binding SendYawKpCommand}"
+                                    Background="#FF9100" Foreground="#0F1923"
+                                    FontWeight="Bold" MinHeight="44"
+                                    HorizontalAlignment="Stretch" Content="Envoyer"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- YAW KI -->
+                    <Border Background="#0F1923" CornerRadius="6" Padding="12">
+                        <Grid ColumnDefinitions="80,*,12,120">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="KI" FontFamily="Consolas, Courier New, monospace"
+                                           FontSize="20" FontWeight="Bold" Foreground="#FF9100"/>
+                                <TextBlock Text="Integral" Classes="label" FontSize="10"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Text="{Binding YawKiText}"
+                                     FontFamily="Consolas, Courier New, monospace" FontSize="16"
+                                     Watermark="ex: 0.0" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="3" Command="{Binding SendYawKiCommand}"
+                                    Background="#FF9100" Foreground="#0F1923"
+                                    FontWeight="Bold" MinHeight="44"
+                                    HorizontalAlignment="Stretch" Content="Envoyer"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- YAW KD -->
+                    <Border Background="#0F1923" CornerRadius="6" Padding="12">
+                        <Grid ColumnDefinitions="80,*,12,120">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="KD" FontFamily="Consolas, Courier New, monospace"
+                                           FontSize="20" FontWeight="Bold" Foreground="#FF9100"/>
+                                <TextBlock Text="Derive" Classes="label" FontSize="10"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Text="{Binding YawKdText}"
+                                     FontFamily="Consolas, Courier New, monospace" FontSize="16"
+                                     Watermark="ex: 0.0" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="3" Command="{Binding SendYawKdCommand}"
+                                    Background="#FF9100" Foreground="#0F1923"
+                                    FontWeight="Bold" MinHeight="44"
+                                    HorizontalAlignment="Stretch" Content="Envoyer"/>
+                        </Grid>
+                    </Border>
+
+                </StackPanel>
+            </Border>
+
+            <!-- Feedback + note -->
+            <TextBlock Text="{Binding StatusText}" Classes="label" FontSize="12"
+                       FontFamily="Consolas, Courier New, monospace"
+                       HorizontalAlignment="Center"/>
+
+            <Border Background="#1C2B3A" BorderBrush="#2A3F55"
+                    BorderThickness="1" CornerRadius="6" Padding="12">
+                <TextBlock Foreground="#78909C" FontSize="11" TextWrapping="Wrap">
+                    <Run Text="Note :"/>
+                    <Run Foreground="#E0E0E0"
+                         Text=" les valeurs sont appliquees immediatement. Elles seront perdues au redemarrage du robot."/>
+                </TextBlock>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+
+</UserControl>

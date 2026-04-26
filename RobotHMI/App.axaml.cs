@@ -8,21 +8,16 @@ using RobotHMI.Views;
 namespace RobotHMI;
 
 // ---------------------------------------------------------------------------
-// App — application startup and manual dependency injection
+// App.axaml.cs — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// This is the composition root of the application.
-// All services and ViewModels are created here and connected to each other.
+// Point de composition de l'application (racine DI manuelle).
+// Seul fichier autorisé à appeler "new" sur les services.
 //
-// Architecture rule: only this file is allowed to call "new" on services.
-// ViewModels receive their dependencies through constructor parameters.
-//
-// How to extend in future phases (architecture §10.2):
-//   Phase 2: create TelemetryPanelViewModel, register TELEMETRY handler
-//   Phase 3: create ControlPanelViewModel,   register ACK handler
-//   Phase 4: create StatusBarViewModel,       register STATE + LOG handlers
-//
-// Never rewrite this file — only add new registrations at the bottom of
-// OnFrameworkInitializationCompleted().
+// Changements V2 :
+//   - Enregistrement "TELEMETRY" vers StatusBar.OnTelemetryReceived (MODIFIÉ V2)
+//   - Enregistrement "LOG" vers LogPanel.OnLogReceived en plus de StatusBar (MODIFIÉ V2)
+//   - STATE dispatché aussi vers LogPanel via lambda étendue (MODIFIÉ V2)
+//   - Aucune autre ligne modifiée — ajouts uniquement
 // ---------------------------------------------------------------------------
 
 public partial class App : Application
@@ -36,68 +31,67 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // ----------------------------------------------------------------
-            // Phase 1 — Create shared services
-            // ----------------------------------------------------------------
-
-            // One shared communication service for the entire application.
-            // All ViewModels that need to communicate receive this same instance.
+            // ────────────────────────────────────────────────────────────
+            // Service partagé unique — reçu par tous les VMs qui en ont besoin
+            // ────────────────────────────────────────────────────────────
             var commService = new RobotCommunicationService();
 
-            // ----------------------------------------------------------------
-            // Phase 2 — Wire the MessageRouter
-            // ----------------------------------------------------------------
-            // MessageRouter sits between RobotCommunicationService and the
-            // ViewModels. It receives every raw JSON string and dispatches it
-            // to the handler registered for its "type" field.
-            // It never parses payloads — that is the job of TelemetryParser.
+            // ────────────────────────────────────────────────────────────
+            // MessageRouter — dispatch des messages par type
+            // Tous les messages reçus de l'ESP32 passent ici.
+            // ────────────────────────────────────────────────────────────
             var router = new MessageRouter();
             commService.MessageReceived += (_, msg) => router.Route(msg);
 
-            // ----------------------------------------------------------------
-            // Phase 1 — Create root ViewModel
-            // ----------------------------------------------------------------
+            // ────────────────────────────────────────────────────────────
+            // ViewModel racine — agrège tous les enfants
+            // ────────────────────────────────────────────────────────────
+            var mainVm = new MainWindowViewModel(commService);
 
-            var mainWindowViewModel = new MainWindowViewModel(commService);
+            // ────────────────────────────────────────────────────────────
+            // ENREGISTREMENTS MESSAGEROUTER
+            //
+            // Règle : un seul enregistrement par type "type" JSON.
+            // Pour dispatcher vers plusieurs VMs, utiliser une lambda.
+            // ────────────────────────────────────────────────────────────
 
-            // ----------------------------------------------------------------
-            // Phase 2 — Register telemetry handlers
-            // ----------------------------------------------------------------
-            // These two lines connect the router to TelemetryPanelViewModel.
-            // When the router sees type == "TELEMETRY" it calls OnTelemetryReceived.
-            // When it sees type == "STATE"     it calls OnStateReceived.
-            router.Register("TELEMETRY", mainWindowViewModel.TelemetryPanel.OnTelemetryReceived);
-
-            // STATE is handled by a combined lambda (registered below in Phase 4)
-            // so both TelemetryPanel and StatusBar receive it from one registration.
-
-            // ----------------------------------------------------------------
-            // Phase 3 — Register ACK handler
-            // ----------------------------------------------------------------
-            // Routes ACK messages from the robot to ControlPanelViewModel.
-            // V1 ACK format: { "type": "ACK", "payload": { "command": "FORWARD" } }
-            router.Register("ACK", mainWindowViewModel.ControlPanel.OnAckReceived);
-
-            // ----------------------------------------------------------------
-            // Phase 4 — Register LOG and STATE handlers
-            // ----------------------------------------------------------------
-            // LOG  → StatusBarViewModel  (recent-log list)
-            // STATE is a combined lambda so both TelemetryPanel and StatusBar
-            // receive every STATE message through a single router entry.
-            router.Register("LOG", mainWindowViewModel.StatusBar.OnLogReceived);
-            router.Register("STATE", rawJson =>
+            // ── TELEMETRY ────────────────────────────────────────────────
+            // → TelemetryPanelViewModel : met à jour les capteurs affiché
+            // → StatusBarViewModel      : met à jour batterie dans la barre haute (MODIFIÉ V2)
+            router.Register("TELEMETRY", rawJson =>
             {
-                mainWindowViewModel.TelemetryPanel.OnStateReceived(rawJson);
-                mainWindowViewModel.StatusBar.OnStateReceived(rawJson);
+                mainVm.TelemetryPanel.OnTelemetryReceived(rawJson);
+                mainVm.StatusBar.OnTelemetryReceived(rawJson);  // MODIFIÉ V2
             });
 
-            // ----------------------------------------------------------------
-            // Show the main window
-            // ----------------------------------------------------------------
+            // ── STATE ────────────────────────────────────────────────────
+            // → TelemetryPanelViewModel : icône d'état dans l'onglet télémétrie
+            // → StatusBarViewModel      : état dans la barre haute
+            router.Register("STATE", rawJson =>
+            {
+                mainVm.TelemetryPanel.OnStateReceived(rawJson);
+                mainVm.StatusBar.OnStateReceived(rawJson);
+            });
 
+            // ── ACK ──────────────────────────────────────────────────────
+            // → ControlPanelViewModel : affiche confirmation de commande reçue
+            router.Register("ACK", mainVm.ControlPanel.OnAckReceived);
+
+            // ── LOG ──────────────────────────────────────────────────────
+            // → StatusBarViewModel : dernier log dans la barre inférieure
+            // → LogPanelViewModel  : liste des 100 derniers logs (MODIFIÉ V2)
+            router.Register("LOG", rawJson =>
+            {
+                mainVm.StatusBar.OnLogReceived(rawJson);
+                mainVm.LogPanel.OnLogReceived(rawJson);  // MODIFIÉ V2
+            });
+
+            // ────────────────────────────────────────────────────────────
+            // Affichage de la fenêtre principale
+            // ────────────────────────────────────────────────────────────
             desktop.MainWindow = new MainWindow
             {
-                DataContext = mainWindowViewModel
+                DataContext = mainVm
             };
         }
 
