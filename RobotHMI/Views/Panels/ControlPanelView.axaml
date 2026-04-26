@@ -1,178 +1,275 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:RobotHMI.ViewModels"
+             xmlns:vm="using:RobotHMI.ViewModels"
              x:Class="RobotHMI.Views.Panels.ControlPanelView"
-             x:DataType="vm:ControlPanelViewModel">
+             x:DataType="vm:ControlPanelViewModel"
+             Background="#0F1923">
 
-    <!--
-        ControlPanelView
-        ════════════════
-        Sends motor commands to the robot.
-        All state and commands come from ControlPanelViewModel — zero logic here.
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="16" Spacing="16">
 
-        Layout:
-          1. "CONTROL" header
-          2. Direction pad — a 3×3 grid with buttons in the cardinal positions
-          3. Speed slider  — 0 to 255, labelled
-          4. Last command  — one-line feedback
-          5. Last ACK      — one-line acknowledgement feedback
+            <!-- ═══════════════════════════════════════════════════════════
+                 SECTION MATCH
+                 ═══════════════════════════════════════════════════════════ -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
 
-        Touch-friendly sizing:
-          - Direction buttons: 64×64 px minimum
-          - All controls disabled (IsEnabled=false) when not connected
-          - IsEnabled bound to IsConnected on the ViewModel
-    -->
+                    <TextBlock Classes="section-title" Text="MATCH"/>
+                    <Separator/>
 
-    <Border Background="#1E1E2E"
-            CornerRadius="8"
-            Padding="16">
+                    <Grid ColumnDefinitions="*,16,*">
 
-        <StackPanel Spacing="16">
+                        <Button Grid.Column="0"
+                                Classes="start-btn"
+                                Command="{Binding StartCommand}"
+                                HorizontalAlignment="Stretch"
+                                Content="START"/>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Header                                                       -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
+                        <Button Grid.Column="2"
+                                Classes="stop-btn"
+                                Command="{Binding StopCommand}"
+                                HorizontalAlignment="Stretch"
+                                Content="STOP"/>
+                    </Grid>
 
-            <TextBlock Text="CONTROL"
-                       Foreground="#89B4FA"
-                       FontSize="13"
-                       FontWeight="Bold"
-                       LetterSpacing="2"/>
+                    <Button Classes="reset-btn"
+                            Command="{Binding ResetCommand}"
+                            HorizontalAlignment="Stretch"
+                            Content="RESET"/>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Direction pad                                                -->
-            <!--                                                              -->
-            <!--   [ empty ] [ ↑ Fwd  ] [ empty ]                           -->
-            <!--   [ ← Left] [ ■ Stop ] [ Right →]                          -->
-            <!--   [ empty ] [ ↓ Back ] [ empty ]                           -->
-            <!--                                                              -->
-            <!-- Grid cells are 64×64, columns and rows each 64 + 8 gap.    -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
+                    <TextBlock Text="{Binding LastCommandText}"
+                               Foreground="#78909C"
+                               FontSize="12"
+                               HorizontalAlignment="Center"
+                               Margin="0,4,0,0"/>
 
-            <Grid RowDefinitions="64,8,64,8,64"
-                  ColumnDefinitions="64,8,64,8,64"
-                  IsEnabled="{Binding IsConnected}"
-                  HorizontalAlignment="Left">
-
-                <!-- Forward — top centre (row 0, col 2) -->
-                <Button Grid.Row="0" Grid.Column="2"
-                        Command="{Binding ForwardCommand}"
-                        Width="64" Height="64"
-                        FontSize="22"
-                        Content="↑"
-                        Background="#313244"
-                        Foreground="#CDD6F4"
-                        CornerRadius="8"
-                        ToolTip.Tip="Forward"/>
-
-                <!-- Left — middle left (row 2, col 0) -->
-                <Button Grid.Row="2" Grid.Column="0"
-                        Command="{Binding LeftCommand}"
-                        Width="64" Height="64"
-                        FontSize="22"
-                        Content="←"
-                        Background="#313244"
-                        Foreground="#CDD6F4"
-                        CornerRadius="8"
-                        ToolTip.Tip="Turn Left"/>
-
-                <!-- Stop — middle centre (row 2, col 2) -->
-                <Button Grid.Row="2" Grid.Column="2"
-                        Command="{Binding StopCommand}"
-                        Width="64" Height="64"
-                        FontSize="18"
-                        Content="■"
-                        Background="#F38BA8"
-                        Foreground="#1E1E2E"
-                        FontWeight="Bold"
-                        CornerRadius="8"
-                        ToolTip.Tip="Stop"/>
-
-                <!-- Right — middle right (row 2, col 4) -->
-                <Button Grid.Row="2" Grid.Column="4"
-                        Command="{Binding RightCommand}"
-                        Width="64" Height="64"
-                        FontSize="22"
-                        Content="→"
-                        Background="#313244"
-                        Foreground="#CDD6F4"
-                        CornerRadius="8"
-                        ToolTip.Tip="Turn Right"/>
-
-                <!-- Backward — bottom centre (row 4, col 2) -->
-                <Button Grid.Row="4" Grid.Column="2"
-                        Command="{Binding BackwardCommand}"
-                        Width="64" Height="64"
-                        FontSize="22"
-                        Content="↓"
-                        Background="#313244"
-                        Foreground="#CDD6F4"
-                        CornerRadius="8"
-                        ToolTip.Tip="Backward"/>
-
-            </Grid>
-
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Speed slider                                                 -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-
-            <StackPanel Spacing="6" IsEnabled="{Binding IsConnected}">
-
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="Speed"
-                               Foreground="#6C7086"
-                               FontSize="13"
-                               VerticalAlignment="Center"
-                               Width="46"/>
-                    <TextBlock Text="{Binding Speed}"
-                               Foreground="#CBA6F7"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Width="34"
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="/ 255"
-                               Foreground="#45475A"
-                               FontSize="13"
-                               VerticalAlignment="Center"/>
                 </StackPanel>
+            </Border>
 
-                <Slider Minimum="0"
-                        Maximum="255"
-                        Value="{Binding Speed}"
-                        Width="204"
-                        HorizontalAlignment="Left"
-                        TickFrequency="1"
-                        IsSnapToTickEnabled="True"/>
+            <!-- ═══════════════════════════════════════════════════════════
+                 SECTION STRATÉGIE
+                 ═══════════════════════════════════════════════════════════ -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
 
-            </StackPanel>
+                    <TextBlock Classes="section-title" Text="STRATÉGIE"/>
+                    <Separator/>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Feedback — last command sent                                 -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
+                    <TextBlock Foreground="#78909C" FontSize="12"
+                               Text="Sélectionner la stratégie active avant le match :"
+                               TextWrapping="Wrap"/>
 
-            <StackPanel Spacing="2">
+                    <Grid ColumnDefinitions="*,8,*,8,*,8,*">
 
-                <TextBlock Text="{Binding LastCommandText}"
-                           Foreground="#A6E3A1"
-                           FontSize="12"/>
+                        <!-- ADAMANTINE -->
+                        <Button Grid.Column="0"
+                                Command="{Binding StrategyAdamantineCommand}"
+                                HorizontalAlignment="Stretch"
+                                MinHeight="60">
+                            <Button.Styles>
+                                <Style Selector="Button">
+                                    <Setter Property="Background" Value="#1C2B3A"/>
+                                    <Setter Property="BorderBrush" Value="#2A3F55"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                </Style>
+                            </Button.Styles>
+                            <Panel>
+                                <TextBlock IsVisible="{Binding IsAdamantineActive}"
+                                           Text="ADAMANTINE" FontSize="13"
+                                           FontWeight="Bold" Foreground="#0F1923"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock IsVisible="{Binding !IsAdamantineActive}"
+                                           Text="ADAMANTINE" FontSize="13"
+                                           Foreground="#78909C"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Panel>
+                        </Button>
 
-                <TextBlock Text="{Binding LastAckText}"
-                           Foreground="#89DCEB"
-                           FontSize="12"/>
+                        <!-- BERSERKER -->
+                        <Button Grid.Column="2"
+                                Command="{Binding StrategyBerserkerCommand}"
+                                HorizontalAlignment="Stretch"
+                                MinHeight="60">
+                            <Button.Styles>
+                                <Style Selector="Button">
+                                    <Setter Property="Background" Value="#1C2B3A"/>
+                                    <Setter Property="BorderBrush" Value="#2A3F55"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                </Style>
+                            </Button.Styles>
+                            <Panel>
+                                <TextBlock IsVisible="{Binding IsBerserkerActive}"
+                                           Text="BERSERKER" FontSize="13"
+                                           FontWeight="Bold" Foreground="#0F1923"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock IsVisible="{Binding !IsBerserkerActive}"
+                                           Text="BERSERKER" FontSize="13"
+                                           Foreground="#78909C"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Panel>
+                        </Button>
 
-            </StackPanel>
+                        <!-- CIRCLE -->
+                        <Button Grid.Column="4"
+                                Command="{Binding StrategyCircleCommand}"
+                                HorizontalAlignment="Stretch"
+                                MinHeight="60">
+                            <Button.Styles>
+                                <Style Selector="Button">
+                                    <Setter Property="Background" Value="#1C2B3A"/>
+                                    <Setter Property="BorderBrush" Value="#2A3F55"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                </Style>
+                            </Button.Styles>
+                            <Panel>
+                                <TextBlock IsVisible="{Binding IsCircleActive}"
+                                           Text="CIRCLE" FontSize="13"
+                                           FontWeight="Bold" Foreground="#0F1923"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock IsVisible="{Binding !IsCircleActive}"
+                                           Text="CIRCLE" FontSize="13"
+                                           Foreground="#78909C"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Panel>
+                        </Button>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Disconnected hint — visible only when not connected          -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
+                        <!-- TRACK (MODIFIE V2.3) -->
+                        <Button Grid.Column="6"
+                                Command="{Binding StrategyTrackCommand}"
+                                HorizontalAlignment="Stretch"
+                                MinHeight="60">
+                            <Button.Styles>
+                                <Style Selector="Button">
+                                    <Setter Property="Background" Value="#1C2B3A"/>
+                                    <Setter Property="BorderBrush" Value="#2A3F55"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                </Style>
+                            </Button.Styles>
+                            <Panel>
+                                <TextBlock IsVisible="{Binding IsTrackActive}"
+                                           Text="TRACK" FontSize="13"
+                                           FontWeight="Bold" Foreground="#0F1923"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock IsVisible="{Binding !IsTrackActive}"
+                                           Text="TRACK" FontSize="13"
+                                           Foreground="#78909C"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Panel>
+                        </Button>
 
-            <TextBlock Text="Connect first to enable controls."
-                       Foreground="#45475A"
-                       FontSize="11"
-                       FontStyle="Italic"
-                       IsVisible="{Binding !IsConnected}"/>
+                    </Grid>
+
+                    <TextBlock HorizontalAlignment="Center"
+                               Foreground="#00D4FF" FontSize="12"
+                               Text="{Binding ActiveStrategy,
+                                      StringFormat='Stratégie active : {0}',
+                                      FallbackValue='Stratégie active : Aucune'}"/>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 SECTION LED RGB
+                 Commande envoyée : LED:R:<v>:G:<v>:B:<v>
+                 ═══════════════════════════════════════════════════════════ -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+
+                    <TextBlock Classes="section-title" Text="LED RGB"/>
+                    <Separator/>
+
+                    <!-- Sliders R G B -->
+                    <Grid RowDefinitions="Auto,8,Auto,8,Auto"
+                          ColumnDefinitions="20,*,12,50">
+
+                        <!-- R -->
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Text="R" FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="14" FontWeight="Bold"
+                                   Foreground="#FF1744" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="0" Grid.Column="1"
+                                Minimum="0" Maximum="255"
+                                Value="{Binding LedR}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="3"
+                                   Text="{Binding LedR}"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="13" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- G -->
+                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                   Text="G" FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="14" FontWeight="Bold"
+                                   Foreground="#00E676" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="2" Grid.Column="1"
+                                Minimum="0" Maximum="255"
+                                Value="{Binding LedG}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="2" Grid.Column="3"
+                                   Text="{Binding LedG}"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="13" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- B -->
+                        <TextBlock Grid.Row="4" Grid.Column="0"
+                                   Text="B" FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="14" FontWeight="Bold"
+                                   Foreground="#00D4FF" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="4" Grid.Column="1"
+                                Minimum="0" Maximum="255"
+                                Value="{Binding LedB}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="4" Grid.Column="3"
+                                   Text="{Binding LedB}"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="13" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+
+                    </Grid>
+
+                    <!-- Prévisualisation couleur + bouton Envoyer -->
+                    <Grid ColumnDefinitions="50,*,12,120">
+
+                        <!-- Aperçu de la couleur sélectionnée -->
+                        <Border Grid.Column="0"
+                                Width="40" Height="40"
+                                CornerRadius="6"
+                                Background="{Binding LedColorPreview}"
+                                BorderBrush="#2A3F55"
+                                BorderThickness="1"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding LedColorText}"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   FontSize="13" Foreground="#78909C"
+                                   VerticalAlignment="Center"/>
+
+                        <Button Grid.Column="3"
+                                Command="{Binding SendLedCommand}"
+                                Background="#2A3F55"
+                                Foreground="#E0E0E0"
+                                FontWeight="Bold"
+                                MinHeight="44"
+                                HorizontalAlignment="Stretch"
+                                Content="Envoyer"/>
+                    </Grid>
+
+                </StackPanel>
+            </Border>
 
         </StackPanel>
-    </Border>
+    </ScrollViewer>
 
 </UserControl>

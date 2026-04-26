@@ -1,56 +1,55 @@
 namespace RobotHMI.Models;
 
 // ---------------------------------------------------------------------------
-// CommandAction
+// MotorCommand — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// Enum representing the five motion actions the robot understands.
-// Values are named to match the "action" strings in the CMD JSON payload
-// exactly, so CommandSerializer can use nameof() or ToString() without
-// any manual mapping.
+// Représente une commande envoyée aux moteurs du robot.
+// Le CommandSerializer convertit ce modèle en string brute MQTT.
 //
-// ESP32 CMD payload (architecture doc §6.2):
-//   { "type": "CMD", "payload": { "action": "FORWARD", "speed": 200 } }
+// Changements V2 :
+//   - MotorCommandType remplace l'ancien enum CommandAction (MODIFIÉ V2)
+//   - Ajout de LeftSpeed et RightSpeed séparés (MODIFIÉ V2)
+//   - Speed générique supprimé — les deux moteurs ont des vitesses indépendantes
+//
+// Exemples de strings produites par CommandSerializer :
+//   MotorCommand(Direct, 200, 200)   → "MOTOR:L:200:R:200"
+//   MotorCommand(Direct, -150, 150)  → "MOTOR:L:-150:R:150"
+//   MotorCommand(Stop, 0, 0)         → "MOTOR:STOP"
 // ---------------------------------------------------------------------------
 
-public enum CommandAction
+/// <summary>
+/// Type de commande moteur envoyée au robot.
+/// </summary>
+public enum MotorCommandType  // MODIFIÉ V2 — était CommandAction
 {
-    Forward,
-    Backward,
-    Left,
-    Right,
-    Stop
+    Direct,  // Vitesses gauche et droite spécifiées séparément → "MOTOR:L:v:R:v"
+    Stop     // Arrêt immédiat des moteurs → "MOTOR:STOP"
 }
 
-// ---------------------------------------------------------------------------
-// MotorCommand
-// ---------------------------------------------------------------------------
-// Plain data class representing a single motor command to send to the robot.
-// Created by ControlPanelViewModel when the user taps a direction button.
-// Consumed by CommandSerializer to produce the JSON envelope.
-//
-// This class has NO logic — it is just data, following the same pattern
-// as SensorData on the receiving side.
-// ---------------------------------------------------------------------------
-
-public class MotorCommand
+/// <summary>
+/// Commande moteur avec vitesses individuelles gauche/droite.
+/// Plage de valeurs : -255 à 255 (négatif = marche arrière).
+/// </summary>
+public class MotorCommand  // MODIFIÉ V2
 {
-    /// <summary>
-    /// The motion action to perform.
-    /// Maps directly to the "action" field in the CMD JSON payload.
-    /// </summary>
-    public CommandAction Action { get; set; }
+    /// <summary>Type de commande (Direct ou Stop).</summary>
+    public MotorCommandType Type { get; set; }  // MODIFIÉ V2
 
-    /// <summary>
-    /// Motor speed value, 0–255, matching the PWM range on the ESP32.
-    /// Maps directly to the "speed" field in the CMD JSON payload.
-    /// For STOP, the speed is irrelevant but is kept for completeness.
-    /// </summary>
-    public int Speed { get; set; }
+    /// <summary>Vitesse moteur gauche, de -255 à 255.</summary>
+    public int LeftSpeed { get; set; }   // MODIFIÉ V2
 
-    /// <summary>Convenience constructor.</summary>
-    public MotorCommand(CommandAction action, int speed)
-    {
-        Action = action;
-        Speed  = speed;
-    }
+    /// <summary>Vitesse moteur droit, de -255 à 255.</summary>
+    public int RightSpeed { get; set; }  // MODIFIÉ V2
+
+    // -----------------------------------------------------------------------
+    // Constructeurs pratiques
+    // -----------------------------------------------------------------------
+
+    /// <summary>Crée une commande arrêt moteur.</summary>
+    public static MotorCommand Stop() =>
+        new() { Type = MotorCommandType.Stop };  // MODIFIÉ V2
+
+    /// <summary>Crée une commande vitesse directe gauche/droite.</summary>
+    public static MotorCommand Direct(int left, int right) =>   // MODIFIÉ V2
+        new() { Type = MotorCommandType.Direct, LeftSpeed = left, RightSpeed = right };
 }

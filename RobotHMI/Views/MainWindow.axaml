@@ -1,71 +1,61 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="clr-namespace:RobotHMI.ViewModels"
-        xmlns:panels="clr-namespace:RobotHMI.Views.Panels"
+        xmlns:vm="using:RobotHMI.ViewModels"
+        xmlns:panels="using:RobotHMI.Views.Panels"
         x:Class="RobotHMI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Mini-Sumo Robot HMI"
-        Width="800" Height="480"
-        Background="#181825">
+        Title="Mini-Sumo HMI"
+        Width="1280" Height="800"
+        MinWidth="800" MinHeight="480"
+        Background="#0F1923">
 
-    <!--
-        MainWindow — Phase 4 (V1 complete)
-        ═══════════════════════════════════
-        Final DockPanel slot assignment:
+    <!-- MODIFIÉ V2.1 — Ajout onglet REGLAGES (6e onglet) -->
 
-          Top    → ConnectionPanel   (Phase 1, unchanged)
-          Bottom → StatusBar         (Phase 4, added here)
-          Left   → ControlPanel      (Phase 3, unchanged)
-          Fill   → TelemetryPanel    (Phase 2, unchanged)
+    <Grid RowDefinitions="Auto,*,Auto">
 
-        Declaration order matters for DockPanel:
-          1. Top-docked panels must come before Bottom-docked panels.
-          2. Left/Right panels come after Top/Bottom.
-          3. The fill child (no Dock attribute) must be declared last.
+        <!-- Barre supérieure fixe -->
+        <Border Grid.Row="0" Background="#1C2B3A" BorderBrush="#2A3F55"
+                BorderThickness="0,0,0,1" Padding="12,8">
+            <panels:StatusBarTopView DataContext="{Binding}"/>
+        </Border>
 
-        "LastChildFill=True" means TelemetryPanel takes all remaining space
-        after ConnectionPanel, StatusBar, and ControlPanel have claimed theirs.
-    -->
+        <!-- Navigation onglets -->
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}"
+                    Background="#0F1923">
 
-    <DockPanel LastChildFill="True">
+            <TabItem Header="CONTRÔLE">
+                <panels:ControlPanelView DataContext="{Binding ControlPanel}"/>
+            </TabItem>
 
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- TOP — Connection panel (Phase 1, unchanged)                      -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
+            <TabItem Header="TÉLÉMÉTRIE">
+                <panels:TelemetryPanelView DataContext="{Binding TelemetryPanel}"/>
+            </TabItem>
 
-        <panels:ConnectionPanelView
-            DockPanel.Dock="Top"
-            DataContext="{Binding ConnectionPanel}"
-            Margin="8,8,8,4"/>
+            <TabItem Header="MOTEURS">
+                <panels:MotorTestPanelView DataContext="{Binding MotorTestPanel}"/>
+            </TabItem>
 
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- BOTTOM — Status bar (Phase 4)                                    -->
-        <!-- Must be declared before Left/Fill children so DockPanel         -->
-        <!-- allocates its height before splitting the remaining width.       -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
+            <TabItem Header="LOGS">
+                <panels:LogPanelView DataContext="{Binding LogPanel}"/>
+            </TabItem>
 
-        <panels:StatusBarView
-            DockPanel.Dock="Bottom"
-            DataContext="{Binding StatusBar}"
-            Margin="8,4,8,8"/>
+            <!-- NOUVEAU V2.1 -->
+            <TabItem Header="REGLAGES">
+                <panels:TuningPanelView DataContext="{Binding TuningPanel}"/>
+            </TabItem>
 
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- LEFT — Control panel (Phase 3, unchanged)                        -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
+            <TabItem Header="CONNEXION">
+                <panels:ConnectionPanelView DataContext="{Binding ConnectionPanel}"/>
+            </TabItem>
 
-        <panels:ControlPanelView
-            DockPanel.Dock="Left"
-            DataContext="{Binding ControlPanel}"
-            Margin="8,4,4,4"/>
+        </TabControl>
 
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- FILL — Telemetry panel (Phase 2, unchanged)                      -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- Barre inférieure fixe -->
+        <Border Grid.Row="2" Background="#1C2B3A" BorderBrush="#2A3F55"
+                BorderThickness="0,1,0,0" Padding="12,6">
+            <panels:StatusBarBottomView DataContext="{Binding}"/>
+        </Border>
 
-        <panels:TelemetryPanelView
-            DataContext="{Binding TelemetryPanel}"
-            Margin="4,4,8,4"/>
-
-    </DockPanel>
+    </Grid>
 
 </Window>
