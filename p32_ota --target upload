@@ -1,0 +1,88 @@
+[33m7cde056[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/creation_Task_FRTOS[m[33m, [m[1;31morigin/feature/creation_Task_FRTOS[m[33m)[m feat: Enhance LidarSensor with UART DMA support and update main task for non-blocking operation
+[33mdcfc723[m Refactor strategies for improved evasive maneuvers and lidar integration
+[33me0827c6[m feat: Add support for PID YAW control parameters in CommandParser and Tasks
+[33m1fc183a[m Refactor EKF and PID implementations; update main loop and task management
+[33m174a337[m fix: Update LIDAR_MID_M constant for improved enemy orientation accuracy
+[33m1f59001[m feat: Integrate PID control and EKF into encoder task, update strategies for improved obstacle detection and response
+[33m149caea[m fix: Use case-insensitive comparison for strategy name selection and initialize RobotQueues in setup
+[33m57f2f1a[m feat: Increase MQTT client buffer size for improved JSON telemetry handling
+[33m9ae0e0b[m feat: Refactor main robot control logic and integrate new strategies
+[33m7fcad12[m chore: fix root gitignore and ignore .claude/ in esp32
+[33m775b02f[m fix: Update pulse per revolution constant in RobotConstants and improve EKF documentation
+[33m3d66a9b[m fix: Update wheel diameter constant and alias MOTOR_STOP to STOP in command parser
+[33m8395f23[m feat: Update EKF to use constants from RobotConstants and modify assembly version
+[33ma8c805b[m refactor: Clean up comments in StrategyInterface and StrategyManager headers
+[33md5000ad[m refactor: Update IMU update logic and remove unused Motor files
+[33m6b8711c[m feat: Implement new sensor types and strategies for mini-sumo robot
+[33m39a7295[m feat: Implement PID controller and add sensor test
+[33m33a7ead[m[33m ([m[1;32mDevelopp[m[33m)[m fix: resolve merge conflict, remove build artifacts, add .gitignore
+[33mce57223[m Add motor and sensor task implementations in RTOS
+[33mf7f94e2[m Add IMUSensor implementation and update SensorType definitions
+[33m985a410[m Refactor motor and sensor management
+[33mdebc294[m Merge branch 'feature/Robot_hmi_restructuration_repo' into Developp
+[33mdcc61fc[m fixing git issues for avalonia app v1
+[33me65c078[m Avalonia APP version 1
+[33m331daff[m Merge branch 'Developp' of https://github.com/FrankNya05/initiation_POO into Developp
+[33m1fb171d[m Merge branch 'feature/encoder_sensor' into Developp
+[33m8ccd73d[m Add encoder test implementation with setup and loop logic
+[33mb215584[m Merge pull request #3 from FrankNya05/feature/encoder_sensor
+[33mb4e9560[m Encoder calibration, slow decay motor control and angle tracking
+[33m736398d[m Implement Encoder class methods and update platformio configuration for C++17
+[33m427d54c[m Fix missing stdint.h include in SensorTypes.hpp
+[33m6167383[m Update main.cpp with Encoder usage example and upgrade build to C++17
+[33m14ead27[m Add Encoder class implementation and integrate with main setup; remove RobotContext
+[33ma0fbc98[m Add strategies and context management for robot behavior; update motor control methods
+[33m936f277[m Merge branch 'feature/motor_driver_control' into Developp
+[33m89a6fbb[m Add DriverManager and update motor usage example
+[33me0144f2[m Implement DriverMotor methods and add hardware test
+[33m6015c1b[m Add LidarSensor implementation and update PinConfig for UART ports; remove unused Encoder and gyroscope files
+[33m8d0c82c[m Merge branch 'feature/Intergration_de_FreeRTOS' into Developp
+[33m30f1852[m Fix LineSensor update method to use analogRead for accurate value retrieval
+[33m86d27e9[m Refactor motor control: remove obsolete Motor files and implement DriverMotor and IDriverMotor interfaces
+[33m340daf9[m Add EKF implementation and integrate sensor tasks with FreeRTOS
+[33mecdbfaf[m Add FreeRTOS configuration and tasks for sensor management and LED blinking
+[33m88b3bc5[m[33m ([m[1;31morigin/feature/Robot_hmi_restructuration_repo[m[33m)[m Phase 3 and 4 implementation for the Avalonia APP
+[33mc26cbf6[m Avalonia App Version 1 phase 2
+[33mb067331[m Avalonia APP - Version 1 Phase 2
+[33mfbadbc8[m Avalonia APP - Phase 1 - Version 1
+[33me3d2e12[m Add extensions.json for VSCode configuration recommendations
+[33m030e1b7[m Restructured the directory for better overall architecture and organization.
+[33mc18f802[m Integrate FreeRTOS task architecture for mini sumo robot
+[33mea51dee[m Remove unused Encoder and gyroscope files, and add newline at end of SensorTypes.hpp
+[33m8aa16c2[m Enhance LidarSensor diagnostics and filtering: add checksum counters, improve angle filtering, and log statistics every 5 seconds
+[33mf44f47a[m Refactor LidarSensor and update main application: swap RX/TX pins, remove unused sensor code, and add serial monitor configuration
+[33mdde7020[m Update sensor manager configuration: add LineSensor instances and correct TOF sensor address
+[33md0fa28f[m Refactor sensor management and configuration: add TOF_IIC_ADDR1, update LineSensor logic, and remove unused files
+[33m7054662[m Implement WiFi communication class and update main application for MQTT integration
+[33m1752fc9[m Résolution du conflit de merge dans main.cpp
+[33m8bf1993[m Refactor LineSensor class to use updated pin configuration and improve data handling
+[33me57a526[m Merge branch 'feature/BLE_SERVER' into Developp
+[33me9ef931[m Implement CommunicationManager and communication interfaces for BLE and UART
+[33m6ae3872[m Merge branch 'feature/Broker_mqtt' into Developp
+[33m37d5be2[m Refactor BattSensor configuration values and implement hardware tests for BattSensor functionality
+[33mb32ead6[m Add MQTT and JSON handling to main logic; update platformio dependencies
+[33me5d98d5[m Merge branch 'feature/batterie_sensor' into Developp
+[33m28635ef[m Add BattSensor hardware tests and refactor main logic; update platformio configuration is ok
+[33m3f97f2a[m Refactor BattSensor class: encapsulate configuration constants, implement voltage reading and alert mechanisms
+[33mf3c860a[m Fix override specifier in SensorsInterface getData method
+[33m52760e8[m Add TOF sensor support and refactor sensor management; implement battery voltage functions
+[33mc0894fc[m[33m ([m[1;31morigin/feature/BLE_SERVER[m[33m)[m Update monitor speed in platformio.ini for consistency
+[33me009856[m Add BLE UUID definitions and refactor sensor types; remove unused files
+[33m26b1a3b[m Pin de sortie stable pour le transistor
+[33m93a8d57[m Update IR sensor pin assignments for consistency and clarity
+[33m5d24d4c[m Refactor pin configuration in PinConfig.hpp for clarity and organization
+[33m22bff23[m Fix duplicate BJT_COMMAND definition in PinConfig.hpp
+[33mc04788f[m Update BJT command pin configuration and correct comment for clarity
+[33m99fc294[m Merge branch 'feature/Abstraction_LIDAR' into Developp
+[33ma21cd3a[m Add LIDAR and sensor configurations, implement temperature sensor class, and update sensor management logic
+[33me191d9f[m Add GPIO pin configuration, implement sensor classes, and set up unit tests
+[33m6b18759[m Update .gitignore to include additional file types for exclusion
+[33m3a4b143[m Refactor sensor architecture: remove unused sensor headers, add new sensor manager and line sensor implementations, and create sensor interface
+[33m3cf1218[m Update README with project structure and architecture philosophy; remove unused header files; add new configuration and task files;
+[33m79ac951[m Add initial implementation of communication and sensor modules for Mini Sumo Robot
+[33mfc830bf[m Merge branch 'feature/LIDAR' into Developp
+[33mb7b6238[m Remove unused function definition and clean up .gitignore
+[33mec32d75[m Add initial VSCode settings for C/C++ development environment
+[33mdb58d28[m test - brice
+[33m01201cb[m[33m ([m[1;31morigin/feature-capeur555[m[33m, [m[1;32mmain[m[33m)[m Develop (#1): initialisation de la structure principale
+[33ma2afd66[m Initial commit

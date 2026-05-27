@@ -53,12 +53,14 @@ public:
      * @return false dès le premier échec.
      */
     bool initAll() {
+        bool allOk = true;
         for (auto& entry : _sensors) {
             if (entry.enabled && !entry.sensor->init()) {
-                return false;
+                entry.enabled = false;  // désactive pour éviter le spam I2C
+                allOk = false;
             }
         }
-        return true;
+        return allOk;
     }
 
     // ── Activation ────────────────────────────

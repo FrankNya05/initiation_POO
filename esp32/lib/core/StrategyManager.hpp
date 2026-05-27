@@ -33,6 +33,7 @@ public:
     void setStrategy(StrategyInterface* strategy) {
         _current = strategy;
         if (_current) {
+            _current->reset();
             LOGF("[StrategyManager] Stratégie active : %s\n", _current->name());
         }
     }

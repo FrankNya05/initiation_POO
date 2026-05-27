@@ -15,7 +15,7 @@
 //  Paramètres robot (depuis RobotConstants.hpp) :
 //  - Diamètre roue    : WHEEL_DIAMETER_MM  (30 mm)
 //  - Entraxe          : WHEELBASE_MM       (56 mm)
-//  - Pulses/tour      : PULSES_PER_REV     (2800)
+//  - Pulses/tour      : PULSES_PER_REV     (1400)
 //
 //  Usage :
 //      EKF ekf;
@@ -126,9 +126,9 @@ private:
     float _x = 0.0f, _y = 0.0f, _theta = 0.0f, _thetaPrev = 0.0f;
     float _cov[3][3] = {};   // matrice de covariance (evite le conflit avec le macro _P de newlib)
 
-    float _qXY    = 0.5f;   // bruit processus position  (mm²/mm parcouru)
-    float _qTheta = 0.1f;   // bruit processus cap       (rad²/rad tourné)
-    float _rIMU   = 0.01f;  // bruit mesure gyroscope    (rad²)
+    float _qXY    = 0.5f;    // bruit processus position  (mm²/mm parcouru)
+    float _qTheta = 0.1f;    // bruit processus cap       (rad²/rad tourné)
+    float _rIMU   = 1e-4f;   // bruit mesure gyroscope (rad²) — calibré: donne K≈85% pendant virage rapide
 
     static constexpr float WHEELBASE = RobotConstants::WHEELBASE_MM;
 
