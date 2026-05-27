@@ -4,104 +4,104 @@ using RobotHMI.Services;
 namespace RobotHMI.ViewModels;
 
 // ---------------------------------------------------------------------------
-// MainWindowViewModel
+// MainWindowViewModel — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// The root ViewModel for the application window.
-// Holds all child ViewModels and exposes them as properties so Views can bind.
+// ViewModel racine de la fenêtre principale.
+// Agrège tous les ViewModels enfants et les expose comme propriétés.
 //
-// Phase 1: ConnectionPanelViewModel
-// Phase 2: TelemetryPanelViewModel  (added)
-// Phase 3: ControlPanelViewModel    (added)
-// Phase 4: StatusBarViewModel       (added)
+// Changements V2 :
+//   - Ajout MotorTestPanel (MODIFIÉ V2) — onglet MOTEURS
+//   - Ajout LogPanel       (MODIFIÉ V2) — onglet LOGS
+//   - Ajout SelectedTabIndex (MODIFIÉ V2) — navigation par onglet
+//   - Suppression de StatusBar.ActiveProtocol (plus utilisé en V2) (MODIFIÉ V2)
 //
-// Connection-state forwarding:
-//   MainWindowViewModel subscribes to ConnectionPanel.PropertyChanged and
-//   forwards relevant values to child VMs that need them:
-//     - ControlPanel.IsConnected     (Phase 3)
-//     - StatusBar.IsConnected        (Phase 4)
-//     - StatusBar.ActiveProtocol     (Phase 4)
-//   This keeps all cross-VM wiring in one place using only the
-//   INotifyPropertyChanged mechanism already present in the codebase.
+// Fils enfants :
+//   ConnectionPanel → onglet CONNEXION (non affiché, géré dans la barre haute)
+//   ControlPanel    → onglet CONTRÔLE (onglet 0, par défaut)
+//   TelemetryPanel  → onglet TÉLÉMÉTRIE (onglet 1)
+//   MotorTestPanel  → onglet MOTEURS    (onglet 2) — MODIFIÉ V2
+//   LogPanel        → onglet LOGS       (onglet 3) — MODIFIÉ V2
+//   StatusBar       → barres fixes haut et bas
 // ---------------------------------------------------------------------------
 
 public class MainWindowViewModel : ViewModelBase
 {
     // -----------------------------------------------------------------------
-    // Child ViewModels
+    // ViewModels enfants — inchangés de V1
     // -----------------------------------------------------------------------
 
-    /// <summary>
-    /// ViewModel for the connection panel (protocol selector, params, connect button).
-    /// Bound to ConnectionPanelView in MainWindow.axaml.
-    /// </summary>
     public ConnectionPanelViewModel ConnectionPanel { get; }
-
-    /// <summary>
-    /// ViewModel for the telemetry panel (sensor values, robot state).
-    /// Bound to TelemetryPanelView in MainWindow.axaml.
-    /// Added in Phase 2.
-    /// </summary>
-    public TelemetryPanelViewModel TelemetryPanel { get; }
-
-    /// <summary>
-    /// ViewModel for the control panel (direction buttons, speed slider).
-    /// Bound to ControlPanelView in MainWindow.axaml.
-    /// Added in Phase 3.
-    /// </summary>
-    public ControlPanelViewModel ControlPanel { get; }
-
-    /// <summary>
-    /// ViewModel for the status bar (connection badge, protocol, robot state, logs).
-    /// Bound to StatusBarView in MainWindow.axaml.
-    /// Added in Phase 4.
-    /// </summary>
-    public StatusBarViewModel StatusBar { get; }
+    public TelemetryPanelViewModel   TelemetryPanel  { get; }
+    public ControlPanelViewModel     ControlPanel    { get; }
+    public StatusBarViewModel        StatusBar        { get; }
 
     // -----------------------------------------------------------------------
-    // Constructor
+    // ViewModels enfants — NOUVEAUX V2
+    // -----------------------------------------------------------------------
+
+    /// <summary>MODIFIÉ V2 — ViewModel du pad directionnel de test moteurs.</summary>
+    public MotorTestPanelViewModel MotorTestPanel { get; }  // MODIFIÉ V2
+
+    /// <summary>MODIFIÉ V2 — ViewModel de l'onglet logs.</summary>
+    public LogPanelViewModel LogPanel { get; }              // MODIFIÉ V2
+
+    /// <summary>NOUVEAU V2.1 — ViewModel de l'onglet réglages PID.</summary>
+    public TuningPanelViewModel TuningPanel { get; }        // MODIFIÉ V2.1
+
+    // -----------------------------------------------------------------------
+    // Navigation par onglets — MODIFIÉ V2
+    // -----------------------------------------------------------------------
+
+    private int _selectedTabIndex = 0;
+
+    public int SelectedTabIndex
+    {
+        get => _selectedTabIndex;
+        set => SetField(ref _selectedTabIndex, value);
+    }
+
+    // -----------------------------------------------------------------------
+    // Constructeur
     // -----------------------------------------------------------------------
 
     public MainWindowViewModel(RobotCommunicationService commService)
     {
-        // All VMs that need to send or receive share the same service instance.
+        // ── VMs existants ────────────────────────────────────────────────
         ConnectionPanel = new ConnectionPanelViewModel(commService);
+        TelemetryPanel  = new TelemetryPanelViewModel();
+        ControlPanel    = new ControlPanelViewModel(commService);
+        StatusBar       = new StatusBarViewModel();
 
-        // TelemetryPanelViewModel receives data via MessageRouter callbacks —
-        // no direct dependency on commService.
-        TelemetryPanel = new TelemetryPanelViewModel();
+        // ── Nouveaux VMs V2 ──────────────────────────────────────────────
+        MotorTestPanel = new MotorTestPanelViewModel(commService);  // MODIFIÉ V2
+        LogPanel       = new LogPanelViewModel();                   // MODIFIÉ V2
 
-        // ControlPanelViewModel needs commService to call SendAsync.
-        ControlPanel = new ControlPanelViewModel(commService);
+        // ── Nouveau V2.1 ─────────────────────────────────────────────────
+        TuningPanel = new TuningPanelViewModel(commService);       // MODIFIÉ V2.1
 
-        // StatusBarViewModel receives data via MessageRouter callbacks and
-        // connection-state forwarding — no direct dependency on commService.
-        StatusBar = new StatusBarViewModel();
-
-        // Forward connection state changes from ConnectionPanel to the VMs
-        // that need them. A single subscription handles all forwarding so
-        // the logic stays in one place.
+        // ── Forwarding de la connexion ───────────────────────────────────
+        // Quand ConnectionPanel.IsConnected change, propager aux VMs qui en ont besoin.
         ConnectionPanel.PropertyChanged += OnConnectionPanelPropertyChanged;
 
-        // Initialise the status bar with the current protocol selection so
-        // it displays correctly before any connection is made.
+        // Initialiser le StatusBar avec le protocole sélectionné au démarrage
         StatusBar.ActiveProtocol = ConnectionPanel.SelectedProtocol;
     }
 
     // -----------------------------------------------------------------------
-    // Connection-state forwarding
+    // Forwarding état de connexion — inchangé de V1
     // -----------------------------------------------------------------------
 
     private void OnConnectionPanelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
         {
-            // IsConnected changed — update both ControlPanel and StatusBar.
             case nameof(ConnectionPanelViewModel.IsConnected):
-                ControlPanel.IsConnected = ConnectionPanel.IsConnected;
-                StatusBar.IsConnected    = ConnectionPanel.IsConnected;
+                // StatusBar met à jour le badge connecté/déconnecté
+                // Note : ControlPanel.IsConnected supprimé en V2 — les boutons
+                // START/STOP/RESET n'ont pas de guard CanExecute dans cette version.
+                StatusBar.IsConnected = ConnectionPanel.IsConnected;
                 break;
 
-            // SelectedProtocol changed — update the StatusBar badge.
             case nameof(ConnectionPanelViewModel.SelectedProtocol):
                 StatusBar.ActiveProtocol = ConnectionPanel.SelectedProtocol;
                 break;

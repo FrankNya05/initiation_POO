@@ -1,0 +1,120 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RobotHMI.ViewModels"
+             x:Class="RobotHMI.Views.Panels.MotorTestPanelView"
+             x:DataType="vm:MotorTestPanelViewModel"
+             Background="#0F1923">
+
+    <!-- NOUVEAU V2 — Onglet MOTEURS : pad directionnel + slider vitesse -->
+
+    <StackPanel Margin="16" Spacing="16" HorizontalAlignment="Center">
+
+        <!-- Avertissement tests uniquement -->
+        <Border Background="#2A1A00" BorderBrush="#FF9100" BorderThickness="1"
+                CornerRadius="6" Padding="12,8">
+            <TextBlock Text="⚠  Mode test — assure-toi que le robot est soulevé avant d'envoyer des commandes moteur."
+                       Foreground="#FF9100"
+                       TextWrapping="Wrap"
+                       FontSize="13"
+                       HorizontalAlignment="Center"/>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             SLIDER VITESSE
+             ═══════════════════════════════════════════════════════════════ -->
+        <Border Classes="card" MaxWidth="400">
+            <StackPanel Spacing="10">
+                <TextBlock Classes="section-title" Text="VITESSE"/>
+                <Separator/>
+
+                <Grid ColumnDefinitions="*,80">
+                    <Slider Grid.Column="0"
+                            Minimum="0" Maximum="255"
+                            Value="{Binding Speed}"
+                            VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1"
+                               Classes="value-mono"
+                               Text="{Binding SpeedText}"
+                               FontSize="22"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="#00D4FF"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             PAD DIRECTIONNEL EN CROIX
+             Disposition :
+                     [  ↑  ]
+               [←] [STOP] [→]
+                     [  ↓  ]
+             ═══════════════════════════════════════════════════════════════ -->
+        <Border Classes="card">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <TextBlock Classes="section-title" Text="PAD DIRECTIONNEL" HorizontalAlignment="Center"/>
+                <Separator/>
+
+                <Grid RowDefinitions="Auto,8,Auto,8,Auto"
+                      ColumnDefinitions="Auto,8,Auto,8,Auto"
+                      HorizontalAlignment="Center">
+
+                    <!-- ↑ Forward -->
+                    <Button Grid.Row="0" Grid.Column="2"
+                            Classes="motor-btn"
+                            Command="{Binding ForwardCommand}"
+                            ToolTip.Tip="Avancer">
+                        ↑
+                    </Button>
+
+                    <!-- ← Left -->
+                    <Button Grid.Row="2" Grid.Column="0"
+                            Classes="motor-btn"
+                            Command="{Binding LeftCommand}"
+                            ToolTip.Tip="Tourner gauche">
+                        ←
+                    </Button>
+
+                    <!-- ⏹ STOP central -->
+                    <Button Grid.Row="2" Grid.Column="2"
+                            Classes="motor-stop-btn"
+                            Command="{Binding StopCommand}"
+                            ToolTip.Tip="Arrêt moteurs">
+                        ⏹
+                    </Button>
+
+                    <!-- → Right -->
+                    <Button Grid.Row="2" Grid.Column="4"
+                            Classes="motor-btn"
+                            Command="{Binding RightCommand}"
+                            ToolTip.Tip="Tourner droite">
+                        →
+                    </Button>
+
+                    <!-- ↓ Backward -->
+                    <Button Grid.Row="4" Grid.Column="2"
+                            Classes="motor-btn"
+                            Command="{Binding BackwardCommand}"
+                            ToolTip.Tip="Reculer">
+                        ↓
+                    </Button>
+
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Dernière commande envoyée -->
+        <Border Classes="card" MaxWidth="400">
+            <StackPanel Spacing="6" HorizontalAlignment="Center">
+                <TextBlock Classes="label" Text="Dernière commande envoyée :"/>
+                <TextBlock Classes="value-mono"
+                           Text="{Binding LastCommandText}"
+                           FontSize="14"
+                           Foreground="#00D4FF"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+    </StackPanel>
+
+</UserControl>

@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RobotHMI.ViewModels"
+             x:Class="RobotHMI.Views.Panels.LogPanelView"
+             x:DataType="vm:LogPanelViewModel"
+             Background="#0F1923">
+
+    <!-- NOUVEAU V2 — Onglet LOGS : liste scrollable + bouton Effacer -->
+
+    <Grid RowDefinitions="*,Auto" Margin="16">
+
+        <!-- Liste scrollable des messages LOG -->
+        <Border Grid.Row="0" Classes="card" Padding="0">
+            <Grid RowDefinitions="Auto,*">
+
+                <!-- En-tête -->
+                <Border Grid.Row="0"
+                        Background="#1C2B3A"
+                        BorderBrush="#2A3F55"
+                        BorderThickness="0,0,0,1"
+                        Padding="12,8">
+                    <TextBlock Classes="section-title"
+                               Text="MESSAGES LOG"
+                               Margin="0"/>
+                </Border>
+
+                <!-- Liste avec police monospace pour lisibilité des logs -->
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding LogEntries}"
+                         Background="#0F1923"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}"
+                                       FontFamily="Consolas, Courier New, monospace"
+                                       FontSize="12"
+                                       Foreground="#E0E0E0"
+                                       Padding="4,2"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+            </Grid>
+        </Border>
+
+        <!-- Barre inférieure : compteur + bouton Effacer -->
+        <Grid Grid.Row="1"
+              ColumnDefinitions="*,Auto"
+              Margin="0,8,0,0">
+
+            <TextBlock Grid.Column="0"
+                       Text="{Binding EntryCountText}"
+                       Classes="label"
+                       VerticalAlignment="Center"/>
+
+            <Button Grid.Column="1"
+                    Command="{Binding ClearCommand}"
+                    Background="#2A3F55"
+                    Foreground="#FF9100"
+                    MinHeight="40"
+                    Padding="16,8"
+                    Content="🗑  Effacer"/>
+        </Grid>
+
+    </Grid>
+
+</UserControl>
