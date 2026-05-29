@@ -72,9 +72,11 @@ def on_message(client, userdata, msg):
     ts    = pl.get("ts", 0)          # millis() sur ESP32
     gx    = imu.get("gx",    0.0)   # deg/s, biais deja soustrait
     theta = pose.get("theta", 0.0)  # rad, EKF fusionne
+    x     = pose.get("x",    0.0)   # mm, EKF
+    y     = pose.get("y",    0.0)   # mm, EKF
 
     t = time.time()
-    _append({"t": t, "ts": ts, "gx": gx, "theta": theta})
+    _append({"t": t, "ts": ts, "gx": gx, "theta": theta, "x": x, "y": y})
 
 # ─── Connexion MQTT ───────────────────────────────────────────────
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -253,9 +255,28 @@ else:
         dev_std_rad = dev_std * math.pi / 180.0    # rad
         # Par radian tourne : qTheta = dev_std_rad^2 / |theta_total_rad|
         theta_total_rad = abs(math.radians(theta_ekf_total))
-        q_theta_opt = (dev_std_rad ** 2) / max(theta_total_rad, 0.1)
+        q_theta_raw = (dev_std_rad ** 2) / max(theta_total_rad, 0.1)
+
+        # Correction du biais K : avec rIMU=1e-4 l'EKF fait K≈0.85 (IMU dominant).
+        # L'ecart EKF-IMU observe = (1-K) * vrai_bruit_odo → vrai_bruit ≈ ecart/(1-K).
+        # Le rIMU calibre en phase 1 permet d'estimer K.
+        try:
+            # P_ss approximee : racine de (qTheta_step * rIMU), qTheta_step = q_theta_raw * dTheta_moy
+            dTheta_moy = abs(math.radians(theta_ekf_total)) / max(len(spin_s), 1)
+            P_ss_approx = math.sqrt(max(q_theta_raw * dTheta_moy * RIMI_RESULT, 1e-20))
+            K_approx    = P_ss_approx / (P_ss_approx + RIMI_RESULT)
+            K_approx    = max(min(K_approx, 0.99), 0.01)
+            correction  = 1.0 / max((1.0 - K_approx) ** 2, 0.01)
+        except Exception:
+            K_approx   = 0.85
+            correction = 44.4   # 1/(1-0.85)^2
+
+        q_theta_opt = q_theta_raw * correction
+
         print(f"\n  Ecart EKF-IMU (std)  : {dev_std:.3f} deg")
-        print(f"  qTheta optimal       : {q_theta_opt:.4f} rad^2/rad")
+        print(f"  K Kalman estime      : {K_approx:.2f}  (IMU{'dominant' if K_approx > 0.5 else 'faible'})")
+        print(f"  qTheta brut (biaise) : {q_theta_raw:.6f} rad^2/rad")
+        print(f"  qTheta corrige x{correction:.0f}   : {q_theta_opt:.4f} rad^2/rad")
         print(f"  qTheta actuel        : 0.1 rad^2/rad")
         QTHETA_RESULT = q_theta_opt
 
@@ -290,11 +311,8 @@ clear_samples()
 if len(str_s) < 10:
     print("ERREUR: pas assez d'echantillons en phase ligne droite.")
 else:
-    xs = [s["theta"] for s in str_s]   # on va relire depuis les poses
-    # La telemetrie a la pose, on a besoin de x,y mais on ne les stocke pas encore
-    # Pour ce test, on utilise uniquement le cap theta
-    thetas_str  = [s["theta"] for s in str_s]
-    thetas_deg  = [math.degrees(t) for t in thetas_str]
+    thetas_str    = [s["theta"] for s in str_s]
+    thetas_deg    = [math.degrees(t) for t in thetas_str]
     heading_drift = thetas_deg[-1] - thetas_deg[0]
 
     print(f"  Echantillons         : {len(str_s)}")
@@ -304,12 +322,54 @@ else:
     gx_during_straight = [s["gx"] for s in str_s]
     gx_straight_mean = statistics.mean(gx_during_straight) if gx_during_straight else 0
     print(f"  gx moyen (droit)     : {gx_straight_mean:+.3f} deg/s")
-    print()
 
     if abs(heading_drift) < 1.0:
         print("  -> Cap stable, deadband actuel adequat")
     else:
         print(f"  -> Derive cap de {heading_drift:.1f}deg : verifier WHEELBASE et deadband gyro")
+
+    # --- Calibration qXY via déviation cross-track ------------------
+    # Apres POSE:RESET, le robot part de (0,0,theta0).
+    # L'axe avant = cos(theta0), sin(theta0).
+    # La déviation latérale (perpendiculaire) mesure l'erreur de position EKF.
+    x0      = str_s[0]["x"]
+    y0      = str_s[0]["y"]
+    theta0  = str_s[0]["theta"]
+    cos_h   = math.cos(theta0)
+    sin_h   = math.sin(theta0)
+
+    cross_tracks = []
+    fwd_dists    = []
+    for s in str_s:
+        dx = s["x"] - x0
+        dy = s["y"] - y0
+        fwd_dists.append( dx * cos_h + dy * sin_h)   # mm, le long de l'axe avant
+        cross_tracks.append(-dx * sin_h + dy * cos_h) # mm, perpendiculaire
+
+    total_dist = fwd_dists[-1] if fwd_dists[-1] > 10 else 1.0
+
+    print()
+    print(f"  Distance parcourue   : {total_dist:.1f} mm")
+    print(f"  Cross-track max      : {max(abs(c) for c in cross_tracks):.2f} mm")
+
+    if total_dist < 50:
+        print("  ATTENTION: robot peu bouge (<50mm) — verifier moteurs et POSE:RESET")
+        QXY_RESULT = 0.5
+    else:
+        ct_var    = statistics.variance(cross_tracks) if len(cross_tracks) > 1 else 0.0
+        q_xy_opt  = ct_var / total_dist
+        print(f"  Variance cross-track : {ct_var:.4f} mm^2")
+        print(f"  qXY optimal          : {q_xy_opt:.5f} mm^2/mm")
+        print(f"  qXY actuel           : 0.5 mm^2/mm")
+        if q_xy_opt < 0.001:
+            print("  -> qXY tres faible : EKF tres confiant en odometrie (sol lisse)")
+        elif q_xy_opt < 0.1:
+            print("  -> qXY faible : bonne adhesion, peu de glissement lateral")
+        elif q_xy_opt < 0.5:
+            print("  -> qXY modere : valeur raisonnable")
+        else:
+            print("  -> qXY eleve : fort glissement lateral ou surface irreguliere")
+        QXY_RESULT = q_xy_opt
 
 client.loop_stop()
 client.disconnect()
@@ -328,14 +388,14 @@ try:
 
     print(f"\n  EKF.hpp (valeurs par defaut du constructeur):")
     print(f"    _rIMU   = {RIMI_RESULT:.2e}f  // etait 0.01f")
-    print(f"    _qTheta = {QTHETA_RESULT:.4f}f     // etait 0.1f")
+    print(f"    _qTheta = {QTHETA_RESULT:.4f}f     // etait 0.1f  (corrige biais K)")
+    try:
+        print(f"    _qXY    = {QXY_RESULT:.5f}f   // etait 0.5f  (calibre cross-track)")
+    except NameError:
+        print(f"    _qXY    = 0.5f          // non calibre (phase 3 incomplete)")
 
     print(f"\n  Tasks.hpp:")
     print(f"    GYRO_EKF_DEADBAND_RAD = {DEADBAND_RESULT:.3f}f * DEG_TO_RAD  // etait 1.000f")
-
-    print()
-    print("  Note: qXY ne peut pas etre calibre sans position XY dans ce script.")
-    print("        Valeur actuelle (0.5) a conserver sauf si derive visible.")
 
 except NameError as e:
     print(f"  Certaines phases ont echoue : {e}")
