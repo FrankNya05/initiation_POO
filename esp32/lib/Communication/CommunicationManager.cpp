@@ -98,8 +98,13 @@ CommChannel CommunicationManager::activeChannel() const {
 // ============================================================================
 
 void CommunicationManager::begin() {
-    Serial.println("[CommManager] Initializing BLE channel...");
-    ble_->begin();
+    // BLE et WiFi ne peuvent pas coexister sur ESP32 : ils épuisent ensemble les
+    // handles esp_timer (ESP_ERR_NO_MEM dans ets_timer_setfn). On n'initialise
+    // que le canal actif — BLE uniquement si WiFi n'est pas configuré.
+    if (current_channel_ == CommChannel::BLE) {
+        Serial.println("[CommManager] Initializing BLE channel...");
+        ble_->begin();
+    }
 
     if (wifi_ != nullptr) {
         Serial.println("[CommManager] Initializing WiFi/MQTT channel...");
@@ -108,14 +113,6 @@ void CommunicationManager::begin() {
 
     Serial.println("[CommManager] Initializing UART channel...");
     uart_->begin();
-
-    // Initialize the secondary channel if present.
-    // Its failure must not block the primary path.
-    if (secondary_ != nullptr) {
-        if (connect_callback_)    secondary_->onConnect(connect_callback_);
-        if (disconnect_callback_) secondary_->onDisconnect(disconnect_callback_);
-        secondary_->begin();
-    }
 }
 
 void CommunicationManager::send(const std::string& data) {

@@ -126,7 +126,7 @@ private:
     float _x = 0.0f, _y = 0.0f, _theta = 0.0f, _thetaPrev = 0.0f;
     float _cov[3][3] = {};   // matrice de covariance (evite le conflit avec le macro _P de newlib)
 
-    float _qXY    = 0.5f;    // bruit processus position  (mm²/mm parcouru)
+    float _qXY    = 0.021f;  // bruit processus position  (mm²/mm parcouru) — calibré test droit: cross-track var=11.2mm² / 540mm
     float _qTheta = 0.1f;    // bruit processus cap       (rad²/rad tourné)
     float _rIMU   = 1e-4f;   // bruit mesure gyroscope (rad²) — calibré: donne K≈85% pendant virage rapide
 
