@@ -145,14 +145,25 @@ mosquitto_sub -h <broker_ip> -t "robot/telemetry"
 
 Le dossier `RobotHMI/` contient une application de bureau développée en **C# / Avalonia** pour piloter le robot visuellement.
 
+### Prérequis
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+
 ### Lancement
 
 ```bash
+cd RobotHMI
+dotnet run
+```
+
+### Compiler un exécutable autonome
+
+```bash
 # Windows
-RobotHMI/RobotHMI_V_2.0.2/RobotHMI.exe
+dotnet publish -c Release -r win-x64 --self-contained true
+# → bin\Release\net8.0\win-x64\publish\RobotHMI.exe
 
 # Linux ARM64 (Raspberry Pi)
-./RobotHMI/RobotHMI_V_2.0.2/RobotHMI
+dotnet publish -c Release -r linux-arm64 --self-contained true
 ```
 
 ### Onglets disponibles
