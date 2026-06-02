@@ -16,13 +16,13 @@ CommunicationManager::CommunicationManager(HardwareSerial& uart_serial,
     : ble_(std::make_unique<RobotBLEServer>()),
       uart_(std::make_unique<UARTComm>(uart_serial, uart_baud)),
       active_comm_(nullptr),          // Not yet pointing anywhere — set in selectChannel()
-      current_channel_(CommChannel::WIFI),
+      current_channel_(CommChannel::BLE),
       auto_select_enabled_(false)
 {
-    // wifi_ n'est pas encore configuré ici → selectChannel() replie sur UART.
-    // Dès que configureWifi() + selectChannel(WIFI) sont appelés, le canal actif
-    // bascule automatiquement sur MQTT.
-    selectChannel(CommChannel::WIFI);
+    // Point active_comm_ at the default channel (BLE).
+    // We do this via selectChannel() rather than directly, so the logic
+    // lives in one place only.
+    selectChannel(CommChannel::BLE);
 }
 
 // ============================================================================
@@ -98,23 +98,21 @@ CommChannel CommunicationManager::activeChannel() const {
 // ============================================================================
 
 void CommunicationManager::begin() {
-    switch (current_channel_) {
-        case CommChannel::BLE:
-            Serial.println("[CommManager] Initializing BLE channel...");
-            ble_->begin();
-            break;
-        case CommChannel::WIFI:
-            if (wifi_ != nullptr) {
-                Serial.println("[CommManager] Initializing WiFi/MQTT channel...");
-                wifi_->begin();
-            }
-            break;
-        case CommChannel::UART:
-            Serial.println("[CommManager] Initializing UART channel...");
-            uart_->begin();
-            break;
+    // BLE et WiFi ne peuvent pas coexister sur ESP32 : ils épuisent ensemble les
+    // handles esp_timer (ESP_ERR_NO_MEM dans ets_timer_setfn). On n'initialise
+    // que le canal actif — BLE uniquement si WiFi n'est pas configuré.
+    if (current_channel_ == CommChannel::BLE) {
+        Serial.println("[CommManager] Initializing BLE channel...");
+        ble_->begin();
     }
-    Serial.println("[CommManager] Channel initialized.");
+
+    if (wifi_ != nullptr) {
+        Serial.println("[CommManager] Initializing WiFi/MQTT channel...");
+        wifi_->begin();
+    }
+
+    Serial.println("[CommManager] Initializing UART channel...");
+    uart_->begin();
 }
 
 void CommunicationManager::send(const std::string& data) {

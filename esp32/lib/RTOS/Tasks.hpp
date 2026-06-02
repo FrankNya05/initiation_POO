@@ -11,6 +11,10 @@
 #include "Encoder.hpp"
 #include "EKF.hpp"
 #include "PID.hpp"
+#include "LidarSensor.hpp"
+#include <ArduinoOTA.h>
+
+extern TaskHandle_t g_commTask;
 
 // ═══════════════════════════════════════════════════════════════
 //  Paramètres passés à taskEncoders (intègre EKF + PID vitesse)
@@ -22,9 +26,11 @@ struct EKFParams {
     DriverManager*  driver;
     PID*            pidLeft;
     PID*            pidRight;
-    PID*            pidYaw;          // correcteur de cap — consigne 0 deg/s
+    PID*            pidYaw;          // correcteur de cap — erreur = theta_target - theta
     volatile int    lastPwmLeft  = 0;
     volatile int    lastPwmRight = 0;
+    float           headingTarget = 0.0f;   // cap enregistré au début d'un déplacement droit
+    bool            headingLocked = false;  // true dès que le cap est enregistré
 };
 
 // ───────────────────────────────────────────────────────────────
@@ -71,7 +77,11 @@ void taskLed(void* pvParameters)
 
 // ───────────────────────────────────────────────────────────────
 //  taskMotors — 100 Hz, Core 1, Prio 4
-//  Lit la commande dans RobotContext et l'applique aux moteurs
+//  Gère UNIQUEMENT l'arrêt moteur (cmd == 0).
+//  Les commandes non-nulles sont pilotées exclusivement par
+//  taskEncoders (PID feedforward) — écrire en parallèle sur le
+//  driver écrasait la correction PID toutes les 10ms et causait
+//  une oscillation PWM → pics de courant → brownout reset.
 // ───────────────────────────────────────────────────────────────
 void taskMotors(void* pvParameters)
 {
@@ -79,7 +89,9 @@ void taskMotors(void* pvParameters)
     for (;;)
     {
         RobotConstants::ActionCommand cmd = RobotContext::instance().getMotorSpeeds();
-        devices->setSpeedAll(cmd.leftSpeed, cmd.rightSpeed);
+        if (cmd.isStop()) {
+            devices->setSpeedAll(0, 0);
+        }
         vTaskDelay(RTOSConfig::PERIOD_MOTORS);
     }
 }
@@ -143,6 +155,52 @@ void taskSensors(void* pvParameters)
 }
 
 // ───────────────────────────────────────────────────────────────
+//  taskLidar — DMA UART, Core 1, Prio 2
+//  Attend un paquet lidar (bloquant), met à jour RobotContext.
+// ───────────────────────────────────────────────────────────────
+void taskLidar(void* pvParameters)
+{
+    LidarSensor* lidar = static_cast<LidarSensor*>(pvParameters);
+    lidar->init();
+    for (;;) {
+        lidar->waitAndProcess();
+        auto& ctx = RobotContext::instance();
+        ctx.setLidarData(lidar->getData());
+        ctx.setLidarCalibDone(lidar->isCalibDone());
+    }
+}
+
+// ───────────────────────────────────────────────────────────────
+//  taskOTA — 100 Hz, Core 0, Prio 1
+//  Appelle ArduinoOTA.handle() pour permettre le flash WiFi.
+//  Doit tourner sur Core 0 (réseau WiFi géré par ESP-IDF sur Core 0).
+// ───────────────────────────────────────────────────────────────
+void taskOTA(void* pvParameters)
+{
+    while (WiFi.status() != WL_CONNECTED) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    ArduinoOTA.setHostname("mini-sumo");
+
+    ArduinoOTA.onStart([]() {
+        if (g_commTask) vTaskSuspend(g_commTask);
+    });
+    ArduinoOTA.onEnd([]() {
+        if (g_commTask) vTaskResume(g_commTask);
+    });
+    ArduinoOTA.onError([](ota_error_t) {
+        if (g_commTask) vTaskResume(g_commTask);
+    });
+
+    ArduinoOTA.begin();
+
+    for (;;) {
+        ArduinoOTA.handle();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// ───────────────────────────────────────────────────────────────
 //  taskStrategy — 20 Hz, Core 1, Prio 2
 //  Lit RobotContext, gère le bouton start, exécute la stratégie
 // ───────────────────────────────────────────────────────────────
@@ -164,6 +222,12 @@ void taskStrategy(void* pvParameters)
             // Appui court en STANDBY → délai 5s réglementaire puis démarrage
             if (press == PressType::SHORT &&
                 state  == RobotConstants::State::STANDBY) {
+                // Attendre la fin de la calibration lidar avant de démarrer
+                if (!ctx.isLidarCalibDone()) {
+                    LOG("[Strategy] Attente calibration zone morte lidar...");
+                    while (!ctx.isLidarCalibDone())
+                        vTaskDelay(pdMS_TO_TICKS(50));
+                }
                 LOG("[Strategy] Départ dans 5 secondes...");
                 ctx.setMotorSpeeds({});           // moteurs arrêtés pendant l'attente
                 vTaskDelay(pdMS_TO_TICKS(5000));  // délai réglementaire
@@ -188,7 +252,7 @@ void taskStrategy(void* pvParameters)
 
         // ── Protection batterie ───────────────────────────────
         SensorData batt = ctx.getBattData();
-        if (batt.isValid && batt.value.scalar <= 6.20f &&
+        if (batt.isValid && batt.value.scalar > 0.0f && batt.value.scalar <= 6.20f &&
             state != RobotConstants::State::STANDBY) {
             LOG("[Strategy] BATTERIE CRITIQUE → STANDBY force");
             ctx.setState(RobotConstants::State::STANDBY);
@@ -380,11 +444,12 @@ void taskComm(void* pvParameters)
 // ───────────────────────────────────────────────────────────────
 void taskEncoders(void* pvParameters)
 {
-    // Vitesses maxi par roue (mesurées à PWM=255, batterie pleine)
-    static constexpr float SPEED_MAX_RPM_L = 105.0f;  // roue gauche, gear 100:1
-    static constexpr float SPEED_MAX_RPM_R = 192.0f;  // roue droite, gear ~54.7:1 (test physique: 13.7/7.5 × 105)
-    // ↑ Si robot tourne encore à droite après flash → diminuer SPEED_MAX_RPM_R (ex: 185, 180...)
-    // ↑ Si robot tourne à gauche → augmenter SPEED_MAX_RPM_R (ex: 200, 205...)
+    // Vitesses maxi par roue extrapolées à PWM=255 (mesurées à PWM=150, batterie ~7.4V)
+    static constexpr float SPEED_MAX_RPM_L = 150.0f;  // roue gauche, gear 50:1  (88.7 RPM @ PWM150)
+    static constexpr float SPEED_MAX_RPM_R = 142.0f;  // roue droite, gear 50:1 CH-N20-3 — ffR=159 PWM à cmd=150 (interpolé entre 137/165)
+    // FF_SCALE_R = L/R > 1 → ffR > ffL. Pour ajuster :
+    // ↑ Si robot tourne à gauche  → AUGMENTER SPEED_MAX_RPM_R (réduit FF_SCALE_R, réduit ffR)
+    // ↑ Si robot tourne à droite  → DIMINUER  SPEED_MAX_RPM_R (augmente FF_SCALE_R, augmente ffR)
 
     EKFParams* p = static_cast<EKFParams*>(pvParameters);
 
@@ -424,9 +489,8 @@ void taskEncoders(void* pvParameters)
             float dtSec  = (now - lastMs) / 1000.0f;
             lastMs       = now;
             float gxRad = imuData.value.imu.gx * DEG_TO_RAD;
-            // Zone morte ±3 deg/s : même seuil que le PID cap, évite que le
-            // biais résiduel gx (~2.5 deg/s) accumule une dérive de cap infinie.
-            static constexpr float GYRO_EKF_DEADBAND_RAD = 3.0f * (float)DEG_TO_RAD;
+            // Zone morte ±1 deg/s : biais résiduel MPU6050 après calibration < 0.1 deg/s
+            static constexpr float GYRO_EKF_DEADBAND_RAD = 0.2f * (float)DEG_TO_RAD;  // calibré: bruit résiduel=0.045°/s → 4σ=0.18°/s
             if (fabsf(gxRad) > GYRO_EKF_DEADBAND_RAD) {
                 p->ekf->updateIMU(gxRad, dtSec);
             }
@@ -450,6 +514,8 @@ void taskEncoders(void* pvParameters)
             p->driver->setSpeedAll(0, 0);
             p->pidLeft->reset();
             p->pidRight->reset();
+            p->pidYaw->reset();
+            p->headingLocked = false;
         } else {
             // Cible identique en RPM roue pour les deux moteurs
             float targetL = (cmd.leftSpeed  / 255.0f) * SPEED_MAX_RPM_L;
@@ -459,28 +525,45 @@ void taskEncoders(void* pvParameters)
             p->pidRight->setSetpoint(targetR);
 
             // Feedforward pré-échelonné : R a besoin de moins de PWM pour la même vitesse roue
-            static constexpr float FF_SCALE_R = SPEED_MAX_RPM_L / SPEED_MAX_RPM_R; // ~0.5
+            static constexpr float FF_SCALE_R = SPEED_MAX_RPM_L / SPEED_MAX_RPM_R;
             int ffL = cmd.leftSpeed;
             int ffR = (int)roundf(cmd.rightSpeed * FF_SCALE_R);
 
             int pwmL = ffL + (int)p->pidLeft->compute(left.rpm);
             int pwmR = ffR + (int)p->pidRight->compute(right.rpm);
 
-            // Correction de cap — uniquement en ligne droite (L == R, même signe)
-            // gx > 0 = rotation CCW (gauche) ; corr < 0 → pwmL monte, pwmR baisse → vire CW
+            // Correction de cap absolu — uniquement en ligne droite (L == R, même signe)
+            // Enregistre theta au premier cycle, puis corrige l'écart theta_target - theta.
+            // Plus efficace que gx sur longue distance : gx corrige la rotation du moment,
+            // theta corrige la dérive accumulée.
             if (cmd.leftSpeed == cmd.rightSpeed && imuData.isValid) {
-                float gx = imuData.value.imu.gx;
-                // Zone morte ±3 deg/s : ignore le biais résiduel et le bruit de vibration
-                static constexpr float YAW_DEADBAND = 3.0f;
-                if (fabsf(gx) > YAW_DEADBAND) {
-                    float corr = p->pidYaw->compute(gx);
+                EKF::Pose pose = p->ekf->getPose();
+                if (!p->headingLocked) {
+                    float ideal;
+                    if (ctx.consumeIdealHeading(ideal))
+                        p->headingTarget = ideal;   // cap idéal fourni par la stratégie
+                    else
+                        p->headingTarget = pose.theta;
+                    p->headingLocked = true;
+                    p->pidYaw->reset();
+                }
+                float thetaErr = p->headingTarget - pose.theta;
+                // Normalise l'erreur dans [-π, π]
+                while (thetaErr >  (float)M_PI) thetaErr -= 2.0f * (float)M_PI;
+                while (thetaErr < -(float)M_PI) thetaErr += 2.0f * (float)M_PI;
+                // Convertit en degrés pour le PID (gains calibrés en °)
+                float thetaErrDeg = thetaErr * (180.0f / (float)M_PI);
+                static constexpr float HEADING_DEADBAND = 0.5f;  // ±0.5° : ignore le bruit EKF
+                if (fabsf(thetaErrDeg) > HEADING_DEADBAND) {
+                    float corr = p->pidYaw->compute(-thetaErrDeg);  // négatif : erreur positive → corr positive → pwmR monte
                     pwmL -= (int)corr;
                     pwmR += (int)corr;
                 } else {
                     p->pidYaw->reset();
                 }
             } else {
-                p->pidYaw->reset();  // ne pas accumuler l'intégrale en virage
+                p->pidYaw->reset();
+                p->headingLocked = false;
             }
 
             p->lastPwmLeft  = constrain(pwmL, -255, 255);
@@ -603,17 +686,28 @@ void taskCommand(void* pvParameters)
                 break;
 
             case CommandType::SEQUENCE:
-                // Exécuter chaque step de la séquence
                 LOGF("[CMD] SEQ %d steps\n", cmd.seqLength);
-                ctx.setState(RobotConstants::State::STANDBY);  // pause stratégie
+                ctx.setState(RobotConstants::State::STANDBY);
                 for (uint8_t i = 0; i < cmd.seqLength; i++) {
-                    ctx.setMotorSpeeds({
-                        cmd.seqSteps[i].leftSpeed,
-                        cmd.seqSteps[i].rightSpeed
-                    });
-                    vTaskDelay(pdMS_TO_TICKS(cmd.seqSteps[i].durationMs));
+                    const MoveStep& step = cmd.seqSteps[i];
+                    ctx.setMotorSpeeds({ step.leftSpeed, step.rightSpeed });
+
+                    if (step.targetMm > 0.0f) {
+                        // Arrêt sur distance EKF (timeout 8s)
+                        EKF::Pose startPose = ctx.getPose();
+                        const uint32_t tMax = millis() + 8000;
+                        while (millis() < tMax) {
+                            EKF::Pose pose = ctx.getPose();
+                            float dx = pose.x - startPose.x;
+                            float dy = pose.y - startPose.y;
+                            if (sqrtf(dx * dx + dy * dy) >= step.targetMm) break;
+                            vTaskDelay(pdMS_TO_TICKS(10));
+                        }
+                    } else {
+                        vTaskDelay(pdMS_TO_TICKS(step.durationMs));
+                    }
                 }
-                ctx.setMotorSpeeds({});  // stop après séquence
+                ctx.setMotorSpeeds({});
                 break;
 
             default:

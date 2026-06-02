@@ -6,19 +6,38 @@
 // ═══════════════════════════════════════════════════════════════
 //  CommandParser.hpp — Parse une string HMI → RobotCommand
 //
-//  Commandes supportées :
-//    START
-//    STOP
-//    RESET
-//    POSE:RESET
-//    STRATEGY:ADAMANTINE | BERSERKER | CIRCLE
-//    MOTOR:L:<v>:R:<v>     ex. MOTOR:L:200:R:150
-//    MOTOR:STOP
-//    PID:KP:<v>            ex. PID:KP:1.2
-//    PID:KI:<v>
-//    PID:KD:<v>
-//    LED:R:<v>:G:<v>:B:<v> ex. LED:R:255:G:0:B:0
-//    SEQ:<name>            ex. SEQ:SPIN_LEFT_90
+//  Commandes supportées (topic MQTT : robot/cmd) :
+//
+//  Contrôle général
+//    START                         remet le robot en marche
+//    STOP                          arrêt moteurs + état STANDBY
+//    RESET                         alias STOP
+//    POSE:RESET                    remet l'EKF à (0, 0, 0)
+//
+//  Stratégies
+//    STRATEGY:<nom>                ex. STRATEGY:Square
+//                                  noms : Track | Adamantine | Berserker
+//                                         Circle | Seek | Square | ...
+//
+//  Moteurs (contrôle direct)
+//    MOTOR:L:<v>:R:<v>             ex. MOTOR:L:150:R:150  (-255 à 255)
+//    MOTOR:STOP                    alias STOP
+//
+//  PID vitesse roues (asservissement gauche/droite)
+//    PID:KP:<v>                    ex. PID:KP:2.0   (défaut : 2.0)
+//    PID:KI:<v>                    ex. PID:KI:0.15  (défaut : 0.15)
+//    PID:KD:<v>                    ex. PID:KD:0.0   (défaut : 0.0)
+//
+//  PID cap / tenue de ligne droite (pidYaw)
+//    PID:YAW:KP:<v>                ex. PID:YAW:KP:5.0   (défaut : 5.0)
+//    PID:YAW:KI:<v>                ex. PID:YAW:KI:0.5   (défaut : 0.5)
+//    PID:YAW:KD:<v>                ex. PID:YAW:KD:0.0   (défaut : 0.0)
+//
+//  LED
+//    LED:R:<v>:G:<v>:B:<v>         ex. LED:R:255:G:0:B:0  (0-255)
+//
+//  Séquences prédéfinies
+//    SEQ:<nom>                     ex. SEQ:SPIN_LEFT_90
 // ═══════════════════════════════════════════════════════════════
 
 enum class CommandType : uint8_t {

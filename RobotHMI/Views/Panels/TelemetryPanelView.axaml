@@ -1,259 +1,420 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:RobotHMI.ViewModels"
+             xmlns:vm="using:RobotHMI.ViewModels"
              x:Class="RobotHMI.Views.Panels.TelemetryPanelView"
-             x:DataType="vm:TelemetryPanelViewModel">
+             x:DataType="vm:TelemetryPanelViewModel"
+             Background="#0F1923">
 
     <!--
-        TelemetryPanelView — V1 protocol
-        ══════════════════════════════════
-        All values are bound to TelemetryPanelViewModel — zero logic here.
-
-        Sections:
-          1. Robot state badge
-          2. Battery (voltage, percent, critical warning)
-          3. Line sensors (frontLeft, frontRight, backLeft, back)
-          4. Lidar (dist, angle, valid indicator)
-          5. Last update timestamp
+        MODIFIÉ V2 — Onglet TÉLÉMÉTRIE : nouveau layout
+        
+        Colonne gauche (~350px) :
+          ┌──────────────────┐
+          │    BATTERIE      │
+          ├──────────────────┤
+          │ CAPTEURS DE LIGNE│
+          └──────────────────┘
+        
+        Colonne droite (reste) :
+          ┌──────────────────────────────────────┐
+          │           RADAR LIDAR                │
+          │   canvas rectangulaire avec grille   │
+          │   et point ennemi positionné         │
+          └──────────────────────────────────────┘
+        
+        Aucun converter — toute la logique de position est dans le ViewModel.
     -->
 
-    <Border Background="#1E1E2E"
-            CornerRadius="8"
-            Padding="16">
+    <Grid ColumnDefinitions="340,12,*" Margin="12">
 
-        <StackPanel Spacing="14">
+        <!-- ═════════════════════════════════════════════════════════════
+             COLONNE GAUCHE : Batterie + Capteurs de ligne + TOF + Moteurs
+             ═════════════════════════════════════════════════════════════ -->
+        <ScrollViewer Grid.Column="0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12">
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Header                                                       -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- ── BATTERIE ───────────────────────────────────────────── -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="section-title" Text="BATTERIE"/>
+                    <Separator/>
 
-            <TextBlock Text="TELEMETRY"
-                       Foreground="#89B4FA"
-                       FontSize="13"
-                       FontWeight="Bold"
-                       LetterSpacing="2"/>
+                    <ProgressBar Value="{Binding BatteryPercent}"
+                                 Minimum="0" Maximum="100"
+                                 Classes.battery-critical="{Binding BatteryCritical}"/>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Robot state                                                  -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
+                    <Grid ColumnDefinitions="*,*">
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Classes="label" Text="Niveau"/>
+                            <TextBlock Classes="value-mono"
+                                       Text="{Binding BatteryPercent, StringFormat={}{0} %}"
+                                       Foreground="#00E676"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Classes="label" Text="Tension"/>
+                            <TextBlock Classes="value-mono"
+                                       Text="{Binding BatteryVoltageText}"/>
+                        </StackPanel>
+                    </Grid>
 
-            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <TextBlock Text="State"
-                           Foreground="#6C7086"
-                           FontSize="13"
-                           Width="80"
-                           VerticalAlignment="Center"/>
-                <Border CornerRadius="4"
-                        Padding="10,4"
-                        Background="#313244">
-                    <TextBlock Text="{Binding RobotStatusText}"
-                               Foreground="#CDD6F4"
-                               FontSize="14"
-                               FontWeight="SemiBold"/>
-                </Border>
-            </StackPanel>
-
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Battery                                                      -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-
-            <StackPanel Spacing="4">
-                <TextBlock Text="Battery"
-                           Foreground="#6C7086"
-                           FontSize="13"/>
-
-                <StackPanel Orientation="Horizontal" Spacing="12">
-
-                    <!-- Voltage -->
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="V:"
-                                   Foreground="#6C7086"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding BatteryVoltageText}"
-                                   Foreground="#CBA6F7"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- Percent -->
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="{Binding BatteryPercent}"
-                                   Foreground="#CBA6F7"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="%"
-                                   Foreground="#6C7086"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- Critical warning dot -->
-                    <Panel Width="12" Height="12" VerticalAlignment="Center">
-                        <Ellipse Width="12" Height="12" Fill="#F38BA8"
-                                 IsVisible="{Binding BatteryCritical}"
-                                 ToolTip.Tip="Battery critical!"/>
-                        <Ellipse Width="12" Height="12" Fill="#313244"
-                                 IsVisible="{Binding !BatteryCritical}"/>
-                    </Panel>
-
+                    <Border Background="#FF1744" CornerRadius="4" Padding="6,3"
+                            IsVisible="{Binding BatteryCritical}"
+                            HorizontalAlignment="Center">
+                        <TextBlock Text="⚠  CRITIQUE" Foreground="White"
+                                   FontWeight="Bold" FontSize="12"
+                                   HorizontalAlignment="Center"/>
+                    </Border>
                 </StackPanel>
-            </StackPanel>
+            </Border>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Line sensors                                                 -->
-            <!--                                                             -->
-            <!--   [FL] [FR]   ← front                                       -->
-            <!--   [BL] [B ]   ← back (V1: backLeft + single back sensor)   -->
-            <!--                                                             -->
-            <!-- Green dot = border detected, dark = clear                   -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- ── CAPTEURS DE LIGNE ──────────────────────────────────── -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="section-title" Text="CAPTEURS DE LIGNE"/>
+                    <Separator/>
 
-            <StackPanel Spacing="4">
-                <TextBlock Text="Line Sensors"
-                           Foreground="#6C7086"
-                           FontSize="13"/>
+                    <TextBlock Classes="label" FontSize="11"
+                               Text="Rouge = ligne détectée · Vue du dessus"
+                               HorizontalAlignment="Center"/>
 
-                <!-- Front row -->
-                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <!-- Layout robot :  [FL][FR]  /  🤖  /  [BL][Bk] -->
+                    <Grid RowDefinitions="Auto,16,Auto"
+                          ColumnDefinitions="*,8,*"
+                          Margin="4,4">
 
-                    <StackPanel Orientation="Horizontal" Spacing="6" Width="88">
-                        <Panel Width="14" Height="14" VerticalAlignment="Center">
-                            <Ellipse Width="14" Height="14" Fill="#A6E3A1"
-                                     IsVisible="{Binding LineFrontLeft}"/>
-                            <Ellipse Width="14" Height="14" Fill="#313244"
-                                     IsVisible="{Binding !LineFrontLeft}"/>
-                        </Panel>
-                        <TextBlock Text="Front L"
-                                   Foreground="#CDD6F4"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
+                        <!-- FL -->
+                        <Border Grid.Row="0" Grid.Column="0"
+                                Background="#2A3F55" CornerRadius="6"
+                                Padding="6,10" HorizontalAlignment="Stretch">
+                            <StackPanel HorizontalAlignment="Center" Spacing="3">
+                                <Panel Width="16" Height="16" HorizontalAlignment="Center">
+                                    <Ellipse Width="16" Height="16" Fill="#FF1744"
+                                             IsVisible="{Binding LineFrontLeft}"/>
+                                    <Ellipse Width="16" Height="16" Fill="#455A64"
+                                             IsVisible="{Binding !LineFrontLeft}"/>
+                                </Panel>
+                                <TextBlock Text="FL" Classes="label" FontSize="11"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
 
-                    <StackPanel Orientation="Horizontal" Spacing="6" Width="88">
-                        <Panel Width="14" Height="14" VerticalAlignment="Center">
-                            <Ellipse Width="14" Height="14" Fill="#A6E3A1"
-                                     IsVisible="{Binding LineFrontRight}"/>
-                            <Ellipse Width="14" Height="14" Fill="#313244"
-                                     IsVisible="{Binding !LineFrontRight}"/>
-                        </Panel>
-                        <TextBlock Text="Front R"
-                                   Foreground="#CDD6F4"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
+                        <!-- FR -->
+                        <Border Grid.Row="0" Grid.Column="2"
+                                Background="#2A3F55" CornerRadius="6"
+                                Padding="6,10" HorizontalAlignment="Stretch">
+                            <StackPanel HorizontalAlignment="Center" Spacing="3">
+                                <Panel Width="16" Height="16" HorizontalAlignment="Center">
+                                    <Ellipse Width="16" Height="16" Fill="#FF1744"
+                                             IsVisible="{Binding LineFrontRight}"/>
+                                    <Ellipse Width="16" Height="16" Fill="#455A64"
+                                             IsVisible="{Binding !LineFrontRight}"/>
+                                </Panel>
+                                <TextBlock Text="FR" Classes="label" FontSize="11"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
 
+                        <!-- Corps robot -->
+                        <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                Background="#1C2B3A" BorderBrush="#2A3F55"
+                                BorderThickness="1" CornerRadius="4">
+                            <TextBlock Text="🤖  Robot" Classes="label" FontSize="11"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+
+                        <!-- BL -->
+                        <Border Grid.Row="2" Grid.Column="0"
+                                Background="#2A3F55" CornerRadius="6"
+                                Padding="6,10" HorizontalAlignment="Stretch">
+                            <StackPanel HorizontalAlignment="Center" Spacing="3">
+                                <Panel Width="16" Height="16" HorizontalAlignment="Center">
+                                    <Ellipse Width="16" Height="16" Fill="#FF1744"
+                                             IsVisible="{Binding LineBackLeft}"/>
+                                    <Ellipse Width="16" Height="16" Fill="#455A64"
+                                             IsVisible="{Binding !LineBackLeft}"/>
+                                </Panel>
+                                <TextBlock Text="BL" Classes="label" FontSize="11"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Back -->
+                        <Border Grid.Row="2" Grid.Column="2"
+                                Background="#2A3F55" CornerRadius="6"
+                                Padding="6,10" HorizontalAlignment="Stretch">
+                            <StackPanel HorizontalAlignment="Center" Spacing="3">
+                                <Panel Width="16" Height="16" HorizontalAlignment="Center">
+                                    <Ellipse Width="16" Height="16" Fill="#FF1744"
+                                             IsVisible="{Binding LineBack}"/>
+                                    <Ellipse Width="16" Height="16" Fill="#455A64"
+                                             IsVisible="{Binding !LineBack}"/>
+                                </Panel>
+                                <TextBlock Text="Back" Classes="label" FontSize="11"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                    </Grid>
+
+                    <TextBlock Classes="label" FontSize="10"
+                               Text="{Binding LastUpdateText, StringFormat='Trame : {0}'}"
+                               HorizontalAlignment="Center"/>
                 </StackPanel>
+            </Border>
 
-                <!-- Back row -->
-                <StackPanel Orientation="Horizontal" Spacing="8">
+            <!-- ── TOF (MODIFIÉ V2.1) ────────────────────────────────── -->
+            <!-- Section TOF : valeur en mm. Affiche trois tirets si donnees absentes -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="section-title" Text="TOF"/>
+                    <Separator/>
 
-                    <StackPanel Orientation="Horizontal" Spacing="6" Width="88">
-                        <Panel Width="14" Height="14" VerticalAlignment="Center">
-                            <Ellipse Width="14" Height="14" Fill="#A6E3A1"
-                                     IsVisible="{Binding LineBackLeft}"/>
-                            <Ellipse Width="14" Height="14" Fill="#313244"
-                                     IsVisible="{Binding !LineBackLeft}"/>
-                        </Panel>
-                        <TextBlock Text="Back L"
-                                   Foreground="#CDD6F4"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid ColumnDefinitions="*,8,*">
 
-                    <!-- V1: single rear sensor ("back"), not backRight -->
-                    <StackPanel Orientation="Horizontal" Spacing="6" Width="88">
-                        <Panel Width="14" Height="14" VerticalAlignment="Center">
-                            <Ellipse Width="14" Height="14" Fill="#A6E3A1"
-                                     IsVisible="{Binding LineBack}"/>
-                            <Ellipse Width="14" Height="14" Fill="#313244"
-                                     IsVisible="{Binding !LineBack}"/>
-                        </Panel>
-                        <TextBlock Text="Back"
-                                   Foreground="#CDD6F4"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
+                        <!-- TOF avant-gauche -->
+                        <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                            <TextBlock Classes="label" FontSize="11"
+                                       Text="Avant-G" HorizontalAlignment="Center"/>
+                            <TextBlock Classes="value-mono" FontSize="18"
+                                       Foreground="#00D4FF" HorizontalAlignment="Center"
+                                       Text="{Binding TofFrontLeftText}"/>
+                        </StackPanel>
 
+                        <!-- Séparateur vertical -->
+                        <Rectangle Grid.Column="1" Width="1"
+                                   Fill="#2A3F55" VerticalAlignment="Stretch"/>
+
+                        <!-- TOF avant-droit -->
+                        <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                            <TextBlock Classes="label" FontSize="11"
+                                       Text="Avant-D" HorizontalAlignment="Center"/>
+                            <TextBlock Classes="value-mono" FontSize="18"
+                                       Foreground="#00D4FF" HorizontalAlignment="Center"
+                                       Text="{Binding TofFrontRightText}"/>
+                        </StackPanel>
+
+                    </Grid>
                 </StackPanel>
-            </StackPanel>
+            </Border>
 
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Lidar                                                        -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Section moteurs PWM actuel -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="section-title" Text="MOTEURS (PWM)"/>
+                    <Separator/>
+                    <Grid ColumnDefinitions="*,8,*">
 
-            <StackPanel Spacing="4">
-                <TextBlock Text="Lidar"
-                           Foreground="#6C7086"
-                           FontSize="13"/>
+                        <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                            <TextBlock Classes="label" FontSize="11"
+                                       Text="Gauche" HorizontalAlignment="Center"/>
+                            <TextBlock Classes="value-mono" FontSize="18"
+                                       Foreground="#00E676" HorizontalAlignment="Center"
+                                       Text="{Binding MotorLeftText}"/>
+                        </StackPanel>
 
-                <StackPanel Orientation="Horizontal" Spacing="16">
+                        <Rectangle Grid.Column="1" Width="1"
+                                   Fill="#2A3F55" VerticalAlignment="Stretch"/>
 
-                    <!-- Distance -->
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="Dist:"
-                                   Foreground="#6C7086"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding LidarDist}"
-                                   Foreground="#CBA6F7"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Width="36"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="cm"
-                                   Foreground="#6C7086"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
+                        <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                            <TextBlock Classes="label" FontSize="11"
+                                       Text="Droit" HorizontalAlignment="Center"/>
+                            <TextBlock Classes="value-mono" FontSize="18"
+                                       Foreground="#00E676" HorizontalAlignment="Center"
+                                       Text="{Binding MotorRightText}"/>
+                        </StackPanel>
 
-                    <!-- Angle -->
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="Angle:"
-                                   Foreground="#6C7086"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding LidarAngle}"
-                                   Foreground="#CBA6F7"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Width="36"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="°"
-                                   Foreground="#6C7086"
-                                   FontSize="12"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- Valid indicator -->
-                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                        <Panel Width="10" Height="10" VerticalAlignment="Center">
-                            <Ellipse Width="10" Height="10" Fill="#A6E3A1"
-                                     IsVisible="{Binding LidarValid}"/>
-                            <Ellipse Width="10" Height="10" Fill="#585B70"
-                                     IsVisible="{Binding !LidarValid}"/>
-                        </Panel>
-                        <TextBlock Text="Valid"
-                                   Foreground="#6C7086"
-                                   FontSize="11"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-
+                    </Grid>
                 </StackPanel>
-            </StackPanel>
-
-            <!-- ═══════════════════════════════════════════════════════════ -->
-            <!-- Timestamp                                                    -->
-            <!-- ═══════════════════════════════════════════════════════════ -->
-
-            <TextBlock Text="{Binding LastUpdateText}"
-                       Foreground="#45475A"
-                       FontSize="11"
-                       FontStyle="Italic"/>
+            </Border>
 
         </StackPanel>
-    </Border>
+        </ScrollViewer>
+
+        <!-- ═════════════════════════════════════════════════════════════
+             COLONNE DROITE : Radar lidar rectangulaire
+             ═════════════════════════════════════════════════════════════ -->
+        <Border Grid.Column="2" Classes="card" Padding="12">
+            <Grid RowDefinitions="Auto,8,*,8,Auto">
+
+                <!-- Titre + statut cible -->
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Classes="section-title"
+                               Text="RADAR LIDAR"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <!-- Cible détectée -->
+                        <TextBlock FontSize="13" FontWeight="SemiBold"
+                                   Foreground="#00E676"
+                                   VerticalAlignment="Center"
+                                   IsVisible="{Binding LidarValid}"
+                                   Text="● Cible détectée"/>
+                        <!-- Aucune cible -->
+                        <TextBlock FontSize="13" FontWeight="SemiBold"
+                                   Foreground="#455A64"
+                                   VerticalAlignment="Center"
+                                   IsVisible="{Binding !LidarValid}"
+                                   Text="○ Aucune cible"/>
+                    </StackPanel>
+                </Grid>
+
+                <Separator Grid.Row="1"/>
+
+                <!--
+                    Canvas radar — cercle complet 360°
+                    Robot au centre (200, 200) du canvas 400x400.
+                    MaxDist = 0.5m (arène 77cm).
+                    Rayon utile = 190px.
+
+                    Anneaux : 0.1m → r=38px / 0.25m → r=95px / 0.5m → r=190px
+                    Canvas.Left = cx - r = 200 - r
+                    Canvas.Top  = cy - r = 200 - r
+                    Width = Height = 2*r
+                -->
+                <Viewbox Grid.Row="2" Stretch="Uniform">
+                    <Canvas Width="400" Height="400"
+                            Background="#0A1520"
+                            ClipToBounds="True">
+
+                        <!-- ── Lignes directionnelles ─────────────────── -->
+                        <!-- Axe vertical (0° avant / 180° arrière) -->
+                        <Line StartPoint="200,10" EndPoint="200,390"
+                              Stroke="#1A3A50" StrokeThickness="1"
+                              StrokeDashArray="4,4"/>
+
+                        <!-- Axe horizontal (90° droite / 270° gauche) -->
+                        <Line StartPoint="10,200" EndPoint="390,200"
+                              Stroke="#1A3A50" StrokeThickness="1"
+                              StrokeDashArray="4,4"/>
+
+                        <!-- Diagonales 45° -->
+                        <Line StartPoint="66,66"   EndPoint="334,334"
+                              Stroke="#152A3A" StrokeThickness="1"
+                              StrokeDashArray="3,5"/>
+                        <Line StartPoint="334,66"  EndPoint="66,334"
+                              Stroke="#152A3A" StrokeThickness="1"
+                              StrokeDashArray="3,5"/>
+
+                        <!-- ── Anneaux de distance ────────────────────── -->
+                        <!-- 0.1m → r=38 → Left=162, Top=162, W=H=76 -->
+                        <Ellipse Canvas.Left="162" Canvas.Top="162"
+                                 Width="76" Height="76"
+                                 Stroke="#0D3A4A" StrokeThickness="1"
+                                 Fill="Transparent"/>
+
+                        <!-- 0.25m → r=95 → Left=105, Top=105, W=H=190 -->
+                        <Ellipse Canvas.Left="105" Canvas.Top="105"
+                                 Width="190" Height="190"
+                                 Stroke="#0D4A5A" StrokeThickness="1"
+                                 Fill="Transparent"/>
+
+                        <!-- 0.5m → r=190 → Left=10, Top=10, W=H=380 -->
+                        <Ellipse Canvas.Left="10" Canvas.Top="10"
+                                 Width="380" Height="380"
+                                 Stroke="#0D6A80" StrokeThickness="2"
+                                 Fill="Transparent"/>
+
+                        <!-- ── Labels de distance ────────────────────── -->
+                        <TextBlock Canvas.Left="204" Canvas.Top="164"
+                                   Text="0.1m" FontSize="9"
+                                   Foreground="#2A6A80"/>
+                        <TextBlock Canvas.Left="204" Canvas.Top="107"
+                                   Text="0.25m" FontSize="9"
+                                   Foreground="#2A6A80"/>
+                        <TextBlock Canvas.Left="204" Canvas.Top="12"
+                                   Text="0.5m" FontSize="9"
+                                   Foreground="#2A8AAA"/>
+
+                        <!-- ── Labels d'angle ────────────────────────── -->
+                        <TextBlock Canvas.Left="188" Canvas.Top="2"
+                                   Text="0°" FontSize="9"
+                                   Foreground="#1A4A5A"/>
+                        <TextBlock Canvas.Left="188" Canvas.Top="385"
+                                   Text="180°" FontSize="9"
+                                   Foreground="#1A4A5A"/>
+                        <TextBlock Canvas.Left="2" Canvas.Top="193"
+                                   Text="270°" FontSize="9"
+                                   Foreground="#1A4A5A"/>
+                        <TextBlock Canvas.Left="375" Canvas.Top="193"
+                                   Text="90°" FontSize="9"
+                                   Foreground="#1A4A5A"/>
+
+                        <!-- ── Robot au centre ────────────────────────── -->
+                        <!-- Triangle pointant vers le haut (direction 0°) -->
+                        <Polygon Points="200,186 192,202 208,202"
+                                 Fill="#00D4FF"
+                                 Stroke="#0F1923"
+                                 StrokeThickness="1"/>
+
+                        <TextBlock Canvas.Left="185" Canvas.Top="204"
+                                   Text="ROBOT" FontSize="8"
+                                   Foreground="#00D4FF"/>
+
+                        <!-- ── Point ennemi ───────────────────────────── -->
+                        <Ellipse Width="16" Height="16"
+                                 Fill="#FF1744"
+                                 Stroke="#FF6688"
+                                 StrokeThickness="2"
+                                 IsVisible="{Binding LidarValid}"
+                                 Canvas.Left="{Binding RadarDotLeft}"
+                                 Canvas.Top="{Binding RadarDotTop}"
+                                 Opacity="0.9"/>
+
+                        <!-- Halo -->
+                        <Ellipse Width="28" Height="28"
+                                 Fill="Transparent"
+                                 Stroke="#FF1744"
+                                 StrokeThickness="1"
+                                 IsVisible="{Binding LidarValid}"
+                                 Canvas.Left="{Binding RadarDotLeft}"
+                                 Canvas.Top="{Binding RadarDotTop}"
+                                 Opacity="0.4"/>
+
+                    </Canvas>
+                </Viewbox>
+
+                <!-- Données numériques lidar sous le radar -->
+                <Grid Grid.Row="4" ColumnDefinitions="*,*,*">
+                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                        <TextBlock Classes="label" Text="Distance" HorizontalAlignment="Center"/>
+                        <TextBlock Classes="value-mono" FontSize="18"
+                                   Foreground="#00D4FF" HorizontalAlignment="Center"
+                                   Text="{Binding LidarDistText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                        <TextBlock Classes="label" Text="Angle" HorizontalAlignment="Center"/>
+                        <TextBlock Classes="value-mono" FontSize="18"
+                                   HorizontalAlignment="Center"
+                                   Text="{Binding LidarAngleText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                        <TextBlock Classes="label" Text="Statut" HorizontalAlignment="Center"/>
+                        <TextBlock FontSize="13" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Styles>
+                                <Style Selector="TextBlock">
+                                    <Setter Property="Foreground" Value="#455A64"/>
+                                </Style>
+                            </TextBlock.Styles>
+                        </TextBlock>
+                        <!-- Deux TextBlock superposés pour éviter un converter -->
+                        <Panel>
+                            <TextBlock Text="● Valide" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#00E676" HorizontalAlignment="Center"
+                                       IsVisible="{Binding LidarValid}"/>
+                            <TextBlock Text="○ Invalide" FontSize="13"
+                                       Foreground="#455A64" HorizontalAlignment="Center"
+                                       IsVisible="{Binding !LidarValid}"/>
+                        </Panel>
+                    </StackPanel>
+                </Grid>
+
+            </Grid>
+        </Border>
+
+    </Grid>
 
 </UserControl>

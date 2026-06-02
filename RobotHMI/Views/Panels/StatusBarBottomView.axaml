@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RobotHMI.ViewModels"
+             x:Class="RobotHMI.Views.Panels.StatusBarBottomView"
+             x:DataType="vm:MainWindowViewModel"
+             Background="Transparent">
+
+    <!--
+        NOUVEAU V2 — Barre inférieure fixe
+        DataContext = MainWindowViewModel (accès à StatusBar)
+        Affiche le dernier message LOG reçu de l'ESP32.
+    -->
+
+    <Grid ColumnDefinitions="Auto,8,*">
+
+        <!-- Label fixe -->
+        <TextBlock Grid.Column="0"
+                   Text="LOG :"
+                   Classes="label"
+                   FontSize="12"
+                   VerticalAlignment="Center"/>
+
+        <!-- Dernier message LOG horodaté -->
+        <TextBlock Grid.Column="2"
+                   Text="{Binding StatusBar.LastLogText}"
+                   FontFamily="Consolas, Courier New, monospace"
+                   FontSize="12"
+                   Foreground="#78909C"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis"/>
+    </Grid>
+
+</UserControl>

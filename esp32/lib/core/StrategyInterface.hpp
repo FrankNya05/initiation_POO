@@ -29,6 +29,10 @@ public:
     //  Appelée par StrategyManager::executeStrategy() depuis taskStrategy.
     virtual RobotConstants::ActionCommand execute(RobotContext& ctx) = 0;
 
+    // ── Appelé à chaque activation de la stratégie ───────────
+    //  Implémentation par défaut vide — surcharger si nécessaire.
+    virtual void reset() {}
+
     // ── Nom de la stratégie ───────────────────────────────────
     virtual const char* name() const = 0;
 

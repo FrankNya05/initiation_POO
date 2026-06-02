@@ -27,6 +27,8 @@ namespace RTOSConfig {
     constexpr uint32_t STACK_ENCODER   = 2048;  // Lecture compteurs interruption
     constexpr uint32_t STACK_COMMAND   = 3072;  // Parsing commandes + séquences
     constexpr uint32_t STACK_LED       = 1024;  // LED RGB — état robot
+    constexpr uint32_t STACK_LIDAR     = 4096;  // DMA UART lidar parser
+    constexpr uint32_t STACK_OTA       = 8192;  // ArduinoOTA handler (MD5 + réseau)
 
     // ── Priorités (0=plus basse, 24=plus haute sur ESP32) ───────
     // Règle : plus le timing est critique, plus la priorité est haute
@@ -38,6 +40,8 @@ namespace RTOSConfig {
     constexpr UBaseType_t PRIO_COMM      = 1;   // Basse    — WiFi/MQTT
     constexpr UBaseType_t PRIO_LOGGER    = 1;   // Basse    — Serial debug
     constexpr UBaseType_t PRIO_LED       = 0;   // Minimale — affichage état
+    constexpr UBaseType_t PRIO_LIDAR     = 2;   // Normale  — réception DMA lidar
+    constexpr UBaseType_t PRIO_OTA       = 4;   // Haute    — transfert OTA prioritaire
 
     // ── Affectation des cœurs ───────────────────────────────────
     // Core 0 → WiFi/BT réservé par ESP-IDF (ne pas y mettre logique temps-réel)
@@ -50,6 +54,8 @@ namespace RTOSConfig {
     constexpr BaseType_t CORE_ENCODER   = 1;    // temps-réel → Core 1
     constexpr BaseType_t CORE_COMMAND   = 1;    // traitement commandes → Core 1
     constexpr BaseType_t CORE_LED       = 0;    // non temps-réel → Core 0
+    constexpr BaseType_t CORE_LIDAR     = 1;    // temps-réel → Core 1
+    constexpr BaseType_t CORE_OTA       = 0;    // réseau → Core 0
 
     // ── Périodes de mise à jour (ms → ticks) ────────────────────
     constexpr TickType_t PERIOD_SENSORS   = pdMS_TO_TICKS(20);   // 50 Hz

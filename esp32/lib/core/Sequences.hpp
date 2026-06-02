@@ -13,7 +13,8 @@
 struct MoveStep {
     int      leftSpeed;   // -255 → +255
     int      rightSpeed;  // -255 → +255
-    uint32_t durationMs;  // durée du step en ms
+    uint32_t durationMs;  // durée du step en ms (ignoré si targetMm > 0)
+    float    targetMm;    // si > 0 : s'arrête quand dist EKF >= targetMm (timeout 8s)
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -38,9 +39,9 @@ constexpr MoveStep SEQ_SPIN_360[] = {
 };
 constexpr uint8_t SEQ_SPIN_360_LEN = 1;
 
-// Avancer ~30 cm
+// Avancer exactement 30 cm (arrêt sur distance EKF — 282mm compense 18mm d'inertie à PWM150)
 constexpr MoveStep SEQ_FORWARD_30CM[] = {
-    { 200, 200, 1000 }
+    { 150, 150, 0, 282.0f }
 };
 constexpr uint8_t SEQ_FORWARD_30CM_LEN = 1;
 

@@ -2,60 +2,35 @@ using Avalonia.Threading;
 using RobotHMI.Models;
 using RobotHMI.Services;
 using System.Collections.ObjectModel;
-using System.Text.Json;
 
 namespace RobotHMI.ViewModels;
 
 // ---------------------------------------------------------------------------
-// StatusBarViewModel
+// StatusBarViewModel — MODIFIÉ V2
 // ---------------------------------------------------------------------------
-// Drives the StatusBarView. Owns the four pieces of ambient information shown
-// at the bottom of the screen:
+// Pilote les barres fixes haut et bas.
 //
-//   1. IsConnected     — whether the robot is currently connected
-//   2. ActiveProtocol  — which protocol is active (BLE / MQTT)
-//   3. RobotStatusText — the last STATE received from the robot
-//   4. RecentLogs      — the last N log strings from the robot
-//
-// How data flows in:
-//   - IsConnected and ActiveProtocol are forwarded by MainWindowViewModel
-//     using the same PropertyChanged-forwarding pattern established in Phase 3.
-//   - OnStateReceived and OnLogReceived are registered with MessageRouter
-//     in App.axaml.cs, exactly like the Phase 2 and Phase 3 handlers.
-//
-// Threading:
-//   - All three handler methods are called on a background thread by
-//     MessageRouter. Every property update is wrapped in
-//     Dispatcher.UIThread.InvokeAsync(), consistent with Phase 2 and Phase 3.
-//
-// Design:
-//   - RecentLogs is an ObservableCollection<string> so the View's ItemsControl
-//     updates automatically when entries are added, without any extra wiring.
-//   - The list is capped at MaxLogEntries to prevent unbounded growth.
-//   - TelemetryParser.ParseState() is reused for STATE messages — no duplicate
-//     parsing logic.
+// Changements V2 par rapport à la version V1 :
+//   - Conservé  : IsConnected, ConnectionStatusText, ActiveProtocol, RecentLogs
+//   - Ajouté    : BatteryPercent, BatteryVoltage, BatteryCritical, BatterySummaryText (MODIFIÉ V2)
+//   - Ajouté    : RobotStatus, RobotStatusText (MODIFIÉ V2)
+//   - Ajouté    : ActiveStrategy (MODIFIÉ V2)
+//   - Ajouté    : LastLogText pour la barre inférieure (MODIFIÉ V2)
+//   - Ajouté    : OnTelemetryReceived() handler (MODIFIÉ V2)
+//   - Mis à jour: RobotStatusText → 4 états V1 (MODIFIÉ V2)
+//   - Conservé  : OnStateReceived(), OnLogReceived() — même signature
 // ---------------------------------------------------------------------------
 
 public class StatusBarViewModel : ViewModelBase
 {
-    // -----------------------------------------------------------------------
-    // Constants
-    // -----------------------------------------------------------------------
-
-    /// <summary>Maximum number of log entries kept in RecentLogs.</summary>
-    private const int MaxLogEntries = 5;
+    private const int MaxLogEntries = 5;  // inchangé
 
     // -----------------------------------------------------------------------
-    // Connection state
+    // Connexion — inchangé V1
     // -----------------------------------------------------------------------
 
     private bool _isConnected = false;
 
-    /// <summary>
-    /// True when the robot is connected.
-    /// Set by MainWindowViewModel when ConnectionPanel.IsConnected changes.
-    /// Drives the connection-state dot and text in the status bar.
-    /// </summary>
     public bool IsConnected
     {
         get => _isConnected;
@@ -66,32 +41,23 @@ public class StatusBarViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Human-readable connection state shown next to the dot.</summary>
-    public string ConnectionStatusText => IsConnected ? "Connected" : "Disconnected";
+    public string ConnectionStatusText => IsConnected ? "● Connecté" : "○ Déconnecté";
 
-    // -----------------------------------------------------------------------
-    // Active protocol
-    // -----------------------------------------------------------------------
+    // Conservé de V1 — utilisé par MainWindowViewModel.OnConnectionPanelPropertyChanged
+    private CommProtocol _activeProtocol = CommProtocol.MQTT;
 
-    private CommProtocol _activeProtocol = CommProtocol.BLE;
-
-    /// <summary>
-    /// The protocol that is currently selected in the connection panel.
-    /// Set by MainWindowViewModel when ConnectionPanel.SelectedProtocol changes.
-    /// Displayed as a small badge in the status bar.
-    /// </summary>
     public CommProtocol ActiveProtocol
     {
         get => _activeProtocol;
         set
         {
             if (SetField(ref _activeProtocol, value))
-                OnPropertyChanged(nameof(ActiveProtocolText));
+                OnPropertyChanged(nameof(ActiveProtocolText));  // MODIFIÉ V2 — notifier la vue
         }
     }
 
-    /// <summary>Display string for the active protocol badge ("BLE" or "MQTT").</summary>
-    public string ActiveProtocolText => ActiveProtocol switch
+    /// <summary>Texte du badge protocole ("BLE" ou "MQTT") — requis par StatusBarView.axaml.</summary>
+    public string ActiveProtocolText => ActiveProtocol switch  // MODIFIÉ V2 — conservé de V1
     {
         CommProtocol.BLE  => "BLE",
         CommProtocol.MQTT => "MQTT",
@@ -99,61 +65,121 @@ public class StatusBarViewModel : ViewModelBase
     };
 
     // -----------------------------------------------------------------------
-    // Robot state
+    // Batterie — MODIFIÉ V2
+    // -----------------------------------------------------------------------
+
+    private int _batteryPercent;
+    public int BatteryPercent
+    {
+        get => _batteryPercent;
+        set
+        {
+            if (SetField(ref _batteryPercent, value))
+                OnPropertyChanged(nameof(BatterySummaryText));
+        }
+    }
+
+    private float _batteryVoltage;
+    public float BatteryVoltage
+    {
+        get => _batteryVoltage;
+        set
+        {
+            if (SetField(ref _batteryVoltage, value))
+                OnPropertyChanged(nameof(BatterySummaryText));
+        }
+    }
+
+    private bool _batteryCritical;
+    public bool BatteryCritical
+    {
+        get => _batteryCritical;
+        set => SetField(ref _batteryCritical, value);
+    }
+
+    /// <summary>MODIFIÉ V2 — Ex: "⚡ 78% — 7.35V" affiché dans la barre haute.</summary>
+    public string BatterySummaryText =>
+        $"⚡ {BatteryPercent}% — {BatteryVoltage:F2}V";
+
+    // -----------------------------------------------------------------------
+    // État robot — MODIFIÉ V2
     // -----------------------------------------------------------------------
 
     private RobotStatus _robotStatus = RobotStatus.Unknown;
 
-    /// <summary>
-    /// The most recent robot operating state received via a STATE message.
-    /// Parsed by TelemetryParser.ParseState and updated by OnStateReceived.
-    /// </summary>
     public RobotStatus RobotStatus
     {
         get => _robotStatus;
-        private set
+        set
         {
             if (SetField(ref _robotStatus, value))
                 OnPropertyChanged(nameof(RobotStatusText));
         }
     }
 
-    /// <summary>Human-readable robot state for display in the status bar.</summary>
+    /// <summary>MODIFIÉ V2 — 4 états V1 alignés sur le protocole.</summary>
     public string RobotStatusText => RobotStatus switch
     {
-        RobotStatus.Idle       => "IDLE",
-        RobotStatus.Searching  => "SEARCH",
-        RobotStatus.Attacking  => "ATTACK",
-        RobotStatus.Retreating => "DEFENSE",
-        RobotStatus.Error      => "ERROR",
-        _                      => "—"
+        RobotStatus.Idle    => "IDLE",
+        RobotStatus.Search  => "SEARCH",
+        RobotStatus.Attack  => "ATTACK",
+        RobotStatus.Defense => "DEFENSE",
+        _                   => "—"
     };
 
     // -----------------------------------------------------------------------
-    // Recent log entries
+    // Stratégie active — MODIFIÉ V2
     // -----------------------------------------------------------------------
 
-    /// <summary>
-    /// The last N log strings received from the robot via LOG messages.
-    /// ObservableCollection so the View's ItemsControl updates automatically.
-    /// Newest entries are inserted at the top (index 0).
-    /// Capped at MaxLogEntries to prevent unbounded growth.
-    /// </summary>
+    private string _activeStrategy = "—";
+
+    /// <summary>MODIFIÉ V2 — Stratégie active, mise à jour par ControlPanelViewModel.</summary>
+    public string ActiveStrategy
+    {
+        get => _activeStrategy;
+        set => SetField(ref _activeStrategy, value);
+    }
+
+    // -----------------------------------------------------------------------
+    // Dernier LOG pour la barre inférieure — MODIFIÉ V2
+    // -----------------------------------------------------------------------
+
+    private string _lastLogText = "Aucun message LOG";
+
+    /// <summary>MODIFIÉ V2 — Affiché dans la barre inférieure.</summary>
+    public string LastLogText
+    {
+        get => _lastLogText;
+        private set => SetField(ref _lastLogText, value);
+    }
+
+    // -----------------------------------------------------------------------
+    // RecentLogs — conservé de V1
+    // -----------------------------------------------------------------------
+
     public ObservableCollection<string> RecentLogs { get; } = new();
 
     // -----------------------------------------------------------------------
-    // Message handlers — registered with MessageRouter in App.axaml.cs,
-    //                    called on a background thread
+    // Handlers — appelés par MessageRouter sur thread de fond
     // -----------------------------------------------------------------------
 
-    /// <summary>
-    /// Called by MessageRouter when a STATE message arrives.
-    /// Reuses TelemetryParser.ParseState — no duplicate logic.
-    /// Marshals the UI update to the UI thread.
-    /// </summary>
+    /// <summary>MODIFIÉ V2 — Nouveau handler. Met à jour la batterie.</summary>
+    public void OnTelemetryReceived(string rawJson)
+    {
+        var data = TelemetryParser.ParseTelemetry(rawJson);
+        if (data == null) return;
+
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            BatteryPercent  = data.BatteryPercent;
+            BatteryVoltage  = data.BatteryVoltage;
+            BatteryCritical = data.BatteryCritical;
+        });
+    }
+
+    /// <summary>Handler STATE — conservé de V1, mapping mis à jour V2.</summary>
     public void OnStateReceived(string rawJson)
     {
-        // Parsing is stateless, safe to do off the UI thread.
         var status = TelemetryParser.ParseState(rawJson);
 
         Dispatcher.UIThread.InvokeAsync(() =>
@@ -162,36 +188,19 @@ public class StatusBarViewModel : ViewModelBase
         });
     }
 
-    /// <summary>
-    /// Called by MessageRouter when a LOG message arrives.
-    /// Extracts the payload string and prepends it to RecentLogs.
-    ///
-    /// Expected format: { "type": "LOG", "payload": "some debug text" }
-    ///
-    /// Parsing is kept inline here because LOG payloads are trivially simple
-    /// (a plain string) and do not warrant a dedicated parser method.
-    /// </summary>
+    /// <summary>Handler LOG — MODIFIÉ V2 : met à jour LastLogText + RecentLogs.</summary>
     public void OnLogReceived(string rawJson)
     {
-        // V1 LOG format: { "type": "LOG", "payload": { "message": "Battery low" } }
-        var logText = TelemetryParser.ParseLogMessage(rawJson);
+        var message = TelemetryParser.ParseLog(rawJson);  // MODIFIÉ V2 — délègue au parser
+        if (string.IsNullOrEmpty(message)) return;
 
-        if (string.IsNullOrEmpty(logText))
-        {
-            Console.WriteLine($"[StatusBarViewModel] Empty or unparseable LOG: {rawJson}");
-            return;
-        }
+        var entry = $"[{DateTime.Now:HH:mm:ss}] {message}";
 
-        var entry = $"[{DateTime.Now:HH:mm:ss}] {logText}";
-
-        // Marshal the collection modification to the UI thread.
-        // ObservableCollection is not thread-safe.
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            // Insert at top so newest entry is always visible without scrolling.
-            RecentLogs.Insert(0, entry);
+            LastLogText = entry;  // MODIFIÉ V2 — barre inférieure
 
-            // Trim to the cap so the list never grows unbounded.
+            RecentLogs.Insert(0, entry);
             while (RecentLogs.Count > MaxLogEntries)
                 RecentLogs.RemoveAt(RecentLogs.Count - 1);
         });
