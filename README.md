@@ -25,7 +25,6 @@ Le robot exécute des stratégies autonomes (carré, triangle, recherche lidar) 
 
 ### 1. Prérequis
 - [PlatformIO](https://platformio.org/) (VS Code extension ou CLI)
-- Python 3.x + `paho-mqtt` (`pip install paho-mqtt`)
 - Broker MQTT (ex: Mosquitto via Docker)
 
 ### 2. Cloner le dépôt
