@@ -13,6 +13,8 @@
 #include "CircleDohyoStrategy.hpp"
 #include "SeekStrategy.hpp"
 #include "SquareStrategy.hpp"
+#include "TriangleStrategy.hpp"
+
 #include "SensorManger.hpp"
 #include "IMUsensor.hpp"
 #include "IRSensor.hpp"
@@ -25,7 +27,7 @@
 
 static constexpr const char* WIFI_SSID       = "S25Ultra";
 static constexpr const char* WIFI_PASS       = "sylvain123";
-static constexpr const char* MQTT_BROKER_IP  = "10.102.143.191";
+static constexpr const char* MQTT_BROKER_IP  = "10.98.51.191";
 static constexpr uint16_t    MQTT_PORT       = 1883;
 static constexpr const char* MQTT_TOPIC_PUB  = "robot/telemetry";
 static constexpr const char* MQTT_TOPIC_SUB  = "robot/cmd";
@@ -41,6 +43,8 @@ TrackStrategy       stratTrack;
 CircleDohyoStrategy stratCircle;
 SeekStrategy        stratSeek;
 SquareStrategy      stratSquare;
+TriangleStrategy    stratTriangle;
+
 LedTaskParams       ledParams { &led, &stratManager };
 
 SensorManager sensorManager;
@@ -64,10 +68,9 @@ LidarSensor          lidar;
 CommunicationManager comm;
 
 static void onStrategyCmd(const char* name) {
-    stratManager.setByName(name);
-    // Sortir du STANDBY pour que taskStrategy exécute la stratégie
-    if (RobotContext::instance().getState() == RobotConstants::State::STANDBY)
-        RobotContext::instance().setState(RobotConstants::State::SEARCH);
+    if (stratManager.setByName(name))
+        if (RobotContext::instance().getState() == RobotConstants::State::STANDBY)
+            RobotContext::instance().setState(RobotConstants::State::SEARCH);
 }
 static void onLedCmd(uint8_t r, uint8_t g, uint8_t b) { led.setColor(r, g, b); }
 static void onPoseResetCmd()                           { ekf.reset(); RobotContext::instance().setPose({0.0f, 0.0f, 0.0f}); }
@@ -174,7 +177,7 @@ void setup() {
     stratManager.registerStrategy(&stratCircle);
     stratManager.registerStrategy(&stratSeek);
     stratManager.registerStrategy(&stratSquare);
-
+    stratManager.registerStrategy(&stratTriangle);
     led.init();
     RobotContext::instance().setState(RobotConstants::State::STANDBY);
 

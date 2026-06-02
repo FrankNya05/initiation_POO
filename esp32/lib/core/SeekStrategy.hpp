@@ -62,10 +62,10 @@ public:
     }
 
 private:
-    static constexpr float FRONT_DEG     = 270.0f; // avant du robot (mesuré empiriquement)
+    static constexpr float FRONT_DEG     =   0.0f; // avant du robot (mesuré empiriquement)
     static constexpr float FRONT_ARC_DEG =  90.0f; // demi-angle de l'arc avant
     static constexpr float MIN_DIST_M    =  0.15f;
-    static constexpr float MAX_DIST_M    =  5.0f;
+    static constexpr float MAX_DIST_M    =  0.8f;
     static constexpr int   SPEED_FWD     = 180;
     static constexpr int   SPEED_SEARCH  = 150;
     static constexpr float ENC_KP        = 0.5f;

@@ -77,7 +77,11 @@ void taskLed(void* pvParameters)
 
 // ───────────────────────────────────────────────────────────────
 //  taskMotors — 100 Hz, Core 1, Prio 4
-//  Lit la commande dans RobotContext et l'applique aux moteurs
+//  Gère UNIQUEMENT l'arrêt moteur (cmd == 0).
+//  Les commandes non-nulles sont pilotées exclusivement par
+//  taskEncoders (PID feedforward) — écrire en parallèle sur le
+//  driver écrasait la correction PID toutes les 10ms et causait
+//  une oscillation PWM → pics de courant → brownout reset.
 // ───────────────────────────────────────────────────────────────
 void taskMotors(void* pvParameters)
 {
@@ -85,7 +89,9 @@ void taskMotors(void* pvParameters)
     for (;;)
     {
         RobotConstants::ActionCommand cmd = RobotContext::instance().getMotorSpeeds();
-        devices->setSpeedAll(cmd.leftSpeed, cmd.rightSpeed);
+        if (cmd.isStop()) {
+            devices->setSpeedAll(0, 0);
+        }
         vTaskDelay(RTOSConfig::PERIOD_MOTORS);
     }
 }
@@ -246,7 +252,7 @@ void taskStrategy(void* pvParameters)
 
         // ── Protection batterie ───────────────────────────────
         SensorData batt = ctx.getBattData();
-        if (batt.isValid && batt.value.scalar <= 6.20f &&
+        if (batt.isValid && batt.value.scalar > 0.0f && batt.value.scalar <= 6.20f &&
             state != RobotConstants::State::STANDBY) {
             LOG("[Strategy] BATTERIE CRITIQUE → STANDBY force");
             ctx.setState(RobotConstants::State::STANDBY);
@@ -680,17 +686,28 @@ void taskCommand(void* pvParameters)
                 break;
 
             case CommandType::SEQUENCE:
-                // Exécuter chaque step de la séquence
                 LOGF("[CMD] SEQ %d steps\n", cmd.seqLength);
-                ctx.setState(RobotConstants::State::STANDBY);  // pause stratégie
+                ctx.setState(RobotConstants::State::STANDBY);
                 for (uint8_t i = 0; i < cmd.seqLength; i++) {
-                    ctx.setMotorSpeeds({
-                        cmd.seqSteps[i].leftSpeed,
-                        cmd.seqSteps[i].rightSpeed
-                    });
-                    vTaskDelay(pdMS_TO_TICKS(cmd.seqSteps[i].durationMs));
+                    const MoveStep& step = cmd.seqSteps[i];
+                    ctx.setMotorSpeeds({ step.leftSpeed, step.rightSpeed });
+
+                    if (step.targetMm > 0.0f) {
+                        // Arrêt sur distance EKF (timeout 8s)
+                        EKF::Pose startPose = ctx.getPose();
+                        const uint32_t tMax = millis() + 8000;
+                        while (millis() < tMax) {
+                            EKF::Pose pose = ctx.getPose();
+                            float dx = pose.x - startPose.x;
+                            float dy = pose.y - startPose.y;
+                            if (sqrtf(dx * dx + dy * dy) >= step.targetMm) break;
+                            vTaskDelay(pdMS_TO_TICKS(10));
+                        }
+                    } else {
+                        vTaskDelay(pdMS_TO_TICKS(step.durationMs));
+                    }
                 }
-                ctx.setMotorSpeeds({});  // stop après séquence
+                ctx.setMotorSpeeds({});
                 break;
 
             default:

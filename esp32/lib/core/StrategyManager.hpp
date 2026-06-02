@@ -46,15 +46,16 @@ public:
     }
 
     // ── Sélectionner par nom (commande HMI) ───────────────────
-    void setByName(const char* name) {
+    bool setByName(const char* name) {
         for (uint8_t i = 0; i < _count; i++) {
             if (strcasecmp(_strategies[i]->name(), name) == 0) {
                 _currentIdx = i;
                 setStrategy(_strategies[i]);
-                return;
+                return true;
             }
         }
         LOGF("[StrategyManager] Stratégie inconnue : %s\n", name);
+        return false;
     }
 
     // ── Exécuter la stratégie courante ────────────────────────

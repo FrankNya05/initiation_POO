@@ -7,19 +7,24 @@
 //  SquareStrategy — Parcours automatique d'un carré 50cm × 50cm
 //
 //  Machine à états non-bloquante appelée à 20Hz par taskStrategy.
-//  Reproduit le comportement de square_test.py en embarqué :
-//    IDLE → FORWARD (450mm) → STOP → TURN (90° gauche) → × 4 → DONE
+//    IDLE → FORWARD (435mm) → STOP → TURN (90° gauche) → × 4 → DONE
 //
-//  Paramètres calibrés empiriquement sur le robot réel :
-//    - SIDE_MM=450 compense l'overshoot de ~50mm à PWM150
-//    - Cible angulaire absolue (t0 + k×π/2) pour éviter l'accumulation
+//  Robustesse aux perturbations :
+//  - Progression mesurée par projection sur le cap idéal (pas distance
+//    euclidienne) : un choc latéral n'interrompt pas prématurément le côté
+//  - Timeout par côté (SIDE_TIMEOUT_MS) : évite le blocage sur obstacle
+//  - Cible angulaire absolue (t0 + k×π/2) : les erreurs de virage ne
+//    s'accumulent pas d'un côté à l'autre
 // ═══════════════════════════════════════════════════════════════
 
 class SquareStrategy : public StrategyInterface {
 public:
     const char* name()  const override { return "Square"; }
     LedColor    color() const override { return LedColor::CYAN; }
-    void        reset()       override { _phase = Phase::IDLE; }
+    void reset() override {
+        _phase = Phase::IDLE;
+        _sideDeadline = 0;
+    }
 
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
         using AC = RobotConstants::ActionCommand;
@@ -34,17 +39,26 @@ public:
                 _startY = pose.y;
                 _t0     = pose.theta;
                 _side   = 0;
-                ctx.setIdealHeading(_t0);   // cap idéal côté 0 = cap initial exact
+                ctx.setIdealHeading(_t0);
+                _sideDeadline = millis() + SIDE_TIMEOUT_MS;
                 _phase  = Phase::FORWARD;
                 ctx.setState(RobotConstants::State::ATTACK);
                 return AC{ FWD_SPEED, FWD_SPEED };
             }
 
             case Phase::FORWARD: {
-                float dx   = pose.x - _startX;
-                float dy   = pose.y - _startY;
-                float dist = sqrtf(dx * dx + dy * dy);
-                if (dist >= SIDE_MM) {
+                float dx = pose.x - _startX;
+                float dy = pose.y - _startY;
+
+                // Progression le long du cap idéal (robuste aux chocs latéraux)
+                float heading  = _norm(_t0 + _side * (float)M_PI / 2.0f);
+                float progress = dx * cosf(heading) + dy * sinf(heading);
+
+                bool targetReached = (progress >= SIDE_MM);
+                bool timedOut      = (millis() > _sideDeadline);
+
+                if (targetReached || timedOut) {
+                    if (timedOut) LOGF("[Square] Cote %d timeout\n", _side);
                     _phase     = Phase::STOP_FWD;
                     _waitTicks = STOP_FWD_TICKS;
                     return AC{ 0, 0 };
@@ -88,10 +102,8 @@ public:
                     _side++;
                     _startX = pose.x;
                     _startY = pose.y;
-                    // Impose le cap idéal (t0 + k×90°) pour que la ligne droite
-                    // suivante parte exactement dans la bonne direction,
-                    // indépendamment de la précision du virage
                     ctx.setIdealHeading(_norm(_t0 + _side * (float)M_PI / 2.0f));
+                    _sideDeadline = millis() + SIDE_TIMEOUT_MS;
                     _phase  = Phase::FORWARD;
                 }
                 return AC{ 0, 0 };
@@ -107,22 +119,24 @@ public:
 private:
     enum class Phase : uint8_t { IDLE, FORWARD, STOP_FWD, TURN, STOP_TURN, DONE };
 
-    Phase _phase      = Phase::IDLE;
-    int   _side       = 0;
-    float _startX     = 0.0f, _startY = 0.0f;
-    float _t0         = 0.0f;
-    float _turnTarget = 0.0f;
-    int   _waitTicks  = 0;
+    Phase    _phase        = Phase::IDLE;
+    int      _side         = 0;
+    float    _startX       = 0.0f, _startY = 0.0f;
+    float    _t0           = 0.0f;
+    float    _turnTarget   = 0.0f;
+    int      _waitTicks    = 0;
+    uint32_t _sideDeadline = 0;
 
     // Paramètres calibrés (voir square_test.py)
-    static constexpr float SIDE_MM         = 435.0f; // recalibré : côté 1=465mm, côté 3=494mm → moyenne 479mm - ~44mm overshoot EKF=435
-    static constexpr int   FWD_SPEED       = 150;
-    static constexpr int   TURN_FAST       = 60;
-    static constexpr int   TURN_SLOW       = 25;     // 25 PWM ≈ 35 deg/s → 1.75 deg/sample @20Hz
-    static constexpr float TURN_SLOW_DEG   = 20.0f;  // passe en slow 20° avant la cible
-    static constexpr float TURN_TOL_DEG    = 1.5f;   // tolerance plus stricte
-    static constexpr int   STOP_FWD_TICKS  = 10;     // 0.5 s à 20 Hz
-    static constexpr int   STOP_TURN_TICKS = 8;      // 0.4 s à 20 Hz
+    static constexpr float    SIDE_MM          = 435.0f;
+    static constexpr int      FWD_SPEED        = 150;
+    static constexpr int      TURN_FAST        = 60;
+    static constexpr int      TURN_SLOW        = 25;
+    static constexpr float    TURN_SLOW_DEG    = 20.0f;
+    static constexpr float    TURN_TOL_DEG     = 1.5f;
+    static constexpr int      STOP_FWD_TICKS   = 10;     // 0.5 s à 20 Hz
+    static constexpr int      STOP_TURN_TICKS  = 8;      // 0.4 s à 20 Hz
+    static constexpr uint32_t SIDE_TIMEOUT_MS  = 6000;   // 6s max par côté (blocage/choc)
 
     static float _norm(float a) {
         while (a >  (float)M_PI) a -= 2.0f * (float)M_PI;
