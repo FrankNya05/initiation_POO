@@ -142,6 +142,39 @@ mosquitto_sub -h <broker_ip> -t "robot/telemetry"
 
 ---
 
+## Interface graphique (RobotHMI)
+
+Le dossier `RobotHMI/` contient une application de bureau développée en **C# / Avalonia** pour piloter le robot visuellement.
+
+### Lancement
+
+```bash
+# Windows
+RobotHMI/RobotHMI_V_2.0.2/RobotHMI.exe
+
+# Linux ARM64 (Raspberry Pi)
+./RobotHMI/RobotHMI_V_2.0.2/RobotHMI
+```
+
+### Onglets disponibles
+
+| Onglet | Description |
+|---|---|
+| **Contrôle** | Boutons START / STOP / RESET, sélection de stratégie |
+| **Télémétrie** | Affichage temps réel : pose (x, y, θ), capteurs, batterie, lidar |
+| **Moteurs** | Pad directionnel pour contrôle manuel des moteurs |
+| **Réglages** | Ajustement des gains PID (vitesse roues + cap yaw) |
+| **Logs** | Journal des messages reçus et envoyés |
+
+### Connexion
+
+1. Lancer l'application
+2. Dans la barre de connexion, entrer l'IP du broker MQTT et le port (défaut : 1883)
+3. Sélectionner le protocole **MQTT** ou **BLE**
+4. Cliquer **Connecter** — la barre de statut passe au vert
+
+---
+
 ## Contrôle du bouton start
 
 | Appui | Action |
