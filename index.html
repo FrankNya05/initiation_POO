@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sylvain Ngacham — Portfolio</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --accent:  #58a6ff;
+      --green:   #3fb950;
+      --orange:  #d29922;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* HERO */
+    .hero {
+      min-height: 100vh; display: flex; flex-direction: column;
+      justify-content: center; align-items: center; text-align: center;
+      padding: 4rem 2rem;
+      background: radial-gradient(ellipse at 50% 0%, #1a2a3a 0%, var(--bg) 70%);
+      border-bottom: 1px solid var(--border);
+    }
+    .avatar {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.5rem; margin-bottom: 1.5rem;
+      box-shadow: 0 0 40px rgba(88,166,255,0.25);
+    }
+    .hero h1 { font-size: 2.8rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .hero h1 span { color: var(--accent); }
+    .hero .cpi { color: var(--orange); font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: 1px; }
+    .hero .tagline { font-size: 1.15rem; color: var(--muted); margin-bottom: 0.6rem; }
+    .hero .location { font-size: 0.9rem; color: var(--muted); margin-bottom: 1.5rem; }
+    .hero .bio { max-width: 620px; font-size: 0.97rem; color: var(--muted); margin-bottom: 2rem; }
+    .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-bottom: 2rem; }
+    .badge { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 0.3rem 0.9rem; font-size: 0.82rem; color: var(--accent); }
+    .cta-row { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+    .btn { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent); color: #0d1117; font-weight: 600; padding: 0.65rem 1.4rem; border-radius: 8px; font-size: 0.92rem; transition: opacity .2s; }
+    .btn:hover { opacity: 0.85; text-decoration: none; }
+    .btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .btn-outline:hover { background: rgba(88,166,255,0.08); }
+
+    /* LAYOUT */
+    section { max-width: 960px; margin: 0 auto; padding: 5rem 2rem; }
+    h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 2rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+    h2 span { color: var(--accent); }
+
+    /* SKILLS */
+    .skills-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    .skill-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem; }
+    .skill-card h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 0.8rem; }
+    .pill-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .pill { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.8rem; color: var(--text); }
+
+    /* PROJECTS */
+    .projects-list { display: flex; flex-direction: column; gap: 1.2rem; }
+    .project-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .project-card.featured { border-color: rgba(88,166,255,0.4); }
+    .project-header { padding: 1.3rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+    .project-header h3 { font-size: 1.15rem; font-weight: 600; color: var(--accent); margin-bottom: 0.3rem; }
+    .project-header p { color: var(--muted); font-size: 0.9rem; }
+    .tag { border-radius: 20px; padding: 0.2rem 0.8rem; font-size: 0.78rem; white-space: nowrap; }
+    .tag-green { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+    .tag-blue  { background: rgba(88,166,255,0.12); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+    .project-body { padding: 1.2rem 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+    .project-body h4 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 0.6rem; }
+    .bullet-list { list-style: none; }
+    .bullet-list li { padding: 0.22rem 0; font-size: 0.9rem; color: var(--text); }
+    .bullet-list li::before { content: "▸ "; color: var(--accent); }
+    .project-footer { padding: 0.8rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 0.8rem; }
+    .link-btn { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--accent); font-size: 0.87rem; padding: 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; transition: border-color .2s; }
+    .link-btn:hover { border-color: var(--accent); text-decoration: none; }
+
+    /* EXPERIENCE & EDUCATION */
+    .timeline { display: flex; flex-direction: column; gap: 1.5rem; }
+    .timeline-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.3rem 1.5rem; }
+    .timeline-item .role { font-size: 1.05rem; font-weight: 600; color: var(--text); margin-bottom: 0.15rem; }
+    .timeline-item .company { font-size: 0.9rem; color: var(--accent); margin-bottom: 0.15rem; }
+    .timeline-item .period { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.8rem; }
+    .timeline-item ul { list-style: none; }
+    .timeline-item ul li { padding: 0.2rem 0; font-size: 0.9rem; color: var(--muted); }
+    .timeline-item ul li::before { content: "▸ "; color: var(--green); }
+
+    /* FOOTER */
+    footer { border-top: 1px solid var(--border); text-align: center; padding: 2rem; color: var(--muted); font-size: 0.85rem; }
+
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 2rem; }
+      .project-body { grid-template-columns: 1fr; }
+    }
+
+    /* GH ICON */
+    .gh-icon { width: 16px; height: 16px; fill: currentColor; }
+  </style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="avatar">⚡</div>
+  <h1>Sylvain <span>Ngacham</span></h1>
+  <p class="cpi">CPI — Candidat à l'OIQ</p>
+  <p class="tagline">Développeur embarqué · Industrie 4.0 · IoT</p>
+  <p class="location">📍 Trois-Rivières, Québec, Canada</p>
+  <p class="bio">
+    CPI en génie électrique spécialisé en systèmes embarqués, automatisation industrielle et Industrie 4.0.
+    5 ans d'expérience en firmware C/C++ temps réel, fusion de données (EKF) et communication IoT.
+    Architectures orientées objet sur ESP32, STM32 et Raspberry Pi.
+  </p>
+  <div class="badges">
+    <span class="badge">ESP32</span><span class="badge">FreeRTOS</span>
+    <span class="badge">C++17</span><span class="badge">EKF</span>
+    <span class="badge">MQTT</span><span class="badge">PLC</span>
+    <span class="badge">C#</span><span class="badge">Python</span>
+  </div>
+  <div class="cta-row">
+    <a class="btn" href="https://github.com/FrankNya05" target="_blank">
+      <svg class="gh-icon" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      GitHub
+    </a>
+    <a class="btn btn-outline" href="https://www.linkedin.com/in/sylvainngacham" target="_blank">LinkedIn</a>
+    <a class="btn btn-outline" href="mailto:sylvainngacham59@gmail.com">Contact</a>
+  </div>
+</div>
+
+<!-- SKILLS -->
+<section>
+  <h2>// <span>Compétences techniques</span></h2>
+  <div class="skills-grid">
+
+    <div class="skill-card">
+      <h3>Plateformes embarquées</h3>
+      <div class="pill-group">
+        <span class="pill">ESP32</span><span class="pill">STM32</span>
+        <span class="pill">Raspberry Pi</span><span class="pill">Arduino</span>
+        <span class="pill">ZUBoard 1CG (FPGA)</span>
+      </div>
+    </div>
+
+    <div class="skill-card">
+      <h3>Temps réel &amp; firmware</h3>
+      <div class="pill-group">
+        <span class="pill">FreeRTOS</span><span class="pill">C/C++17 OOP</span>
+        <span class="pill">EKF</span><span class="pill">PID</span>
+        <span class="pill">Encodeurs quadrature</span><span class="pill">TB6612</span>
+      </div>
+    </div>
+
+    <div class="skill-card">
+      <h3>IoT &amp; communication</h3>
+      <div class="pill-group">
+        <span class="pill">MQTT</span><span class="pill">REST API</span>
+        <span class="pill">WiFi</span><span class="pill">BLE</span>
+        <span class="pill">I2C</span><span class="pill">SPI</span>
+        <span class="pill">UART</span><span class="pill">CAN Bus</span>
+        <span class="pill">EtherNet/IP</span><span class="pill">Profinet</span>
+      </div>
+    </div>
+
+    <div class="skill-card">
+      <h3>Langages &amp; logiciels</h3>
+      <div class="pill-group">
+        <span class="pill">C/C++17</span><span class="pill">C#</span>
+        <span class="pill">Python</span><span class="pill">VHDL</span>
+        <span class="pill">SQLite</span><span class="pill">SQL</span>
+        <span class="pill">YOLO</span>
+      </div>
+    </div>
+
+    <div class="skill-card">
+      <h3>HMI &amp; interfaces</h3>
+      <div class="pill-group">
+        <span class="pill">C# .NET/WPF</span><span class="pill">Avalonia</span>
+        <span class="pill">PySide6 / Qt</span>
+        <span class="pill">FactoryTalk View</span>
+        <span class="pill">SCADA</span>
+      </div>
+    </div>
+
+    <div class="skill-card">
+      <h3>Outils &amp; automatisation</h3>
+      <div class="pill-group">
+        <span class="pill">Git / GitLab</span><span class="pill">PlatformIO</span>
+        <span class="pill">Altium Designer</span><span class="pill">AutoCAD Élec.</span>
+        <span class="pill">Matlab</span><span class="pill">LabVIEW</span>
+        <span class="pill">VIVADO</span><span class="pill">Allen Bradley</span>
+        <span class="pill">Siemens PLC</span><span class="pill">GRAFCET</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- PROJECTS -->
+<section>
+  <h2>// <span>Projets</span></h2>
+  <div class="projects-list">
+
+    <div class="project-card featured">
+      <div class="project-header">
+        <div>
+          <h3>Robot Mini-Sumo autonome</h3>
+          <p>ESP32 · FreeRTOS · EKF · MQTT · C++17 — 2025–2026</p>
+        </div>
+        <span class="tag tag-green">En cours</span>
+      </div>
+      <div class="project-body">
+        <div>
+          <h4>Réalisations</h4>
+          <ul class="bullet-list">
+            <li>Architecture 4 couches OOP sur ESP32 dual-core</li>
+            <li>8 tâches FreeRTOS sur 2 cores jusqu'à 200 Hz</li>
+            <li>Localisation EKF : encodeurs + gyro MPU-6050 + Lidar LD06</li>
+            <li>6 stratégies de combat interchangeables</li>
+            <li>Télémétrie JSON 10 Hz via MQTT/WiFi</li>
+            <li>Interface HMI C#/Avalonia avec commandes temps réel</li>
+            <li>Broker Mosquitto déployé sous Docker</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Stack technique</h4>
+          <div class="pill-group">
+            <span class="pill">ESP32</span><span class="pill">C++17</span>
+            <span class="pill">FreeRTOS</span><span class="pill">EKF</span>
+            <span class="pill">PID</span><span class="pill">MQTT</span>
+            <span class="pill">MPU-6050</span><span class="pill">Lidar LD06</span>
+            <span class="pill">C# / Avalonia</span><span class="pill">Docker</span>
+            <span class="pill">PlatformIO</span>
+          </div>
+        </div>
+      </div>
+      <div class="project-footer">
+        <a class="link-btn" href="https://github.com/FrankNya05/initiation_POO" target="_blank">
+          <svg class="gh-icon" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          Voir le code
+        </a>
+      </div>
+    </div>
+
+    <div class="project-card">
+      <div class="project-header">
+        <div>
+          <h3>Opération synchronisée des stations FESTO</h3>
+          <p>PLC Allen Bradley · GRAFCET · HMI opérateur — Décembre 2025</p>
+        </div>
+        <span class="tag tag-blue">Complété</span>
+      </div>
+      <div class="project-body">
+        <div>
+          <h4>Réalisations</h4>
+          <ul class="bullet-list">
+            <li>Programmation automates Allen Bradley depuis GRAFCET</li>
+            <li>Communication inter-automates</li>
+            <li>Interface HMI opérateur</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Stack</h4>
+          <div class="pill-group">
+            <span class="pill">Allen Bradley</span><span class="pill">GRAFCET</span>
+            <span class="pill">FactoryTalk View</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card">
+      <div class="project-header">
+        <div>
+          <h3>Véhicule à chenilles — Système de commande embarqué</h3>
+          <p>Microcontrôleur · Circuit électronique · Navigation — Décembre 2025</p>
+        </div>
+        <span class="tag tag-blue">Complété</span>
+      </div>
+      <div class="project-body">
+        <div>
+          <h4>Réalisations</h4>
+          <ul class="bullet-list">
+            <li>Conception du circuit électronique</li>
+            <li>Algorithme de navigation embarqué</li>
+            <li>Contrôle moteur sur microcontrôleur</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Stack</h4>
+          <div class="pill-group">
+            <span class="pill">C/C++</span><span class="pill">Microcontrôleur</span>
+            <span class="pill">Électronique</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- EXPERIENCE -->
+<section>
+  <h2>// <span>Expériences professionnelles</span></h2>
+  <div class="timeline">
+
+    <div class="timeline-item">
+      <div class="role">Spécialiste systèmes embarqués — IoT</div>
+      <div class="company">Mounir Holding | QuickSafe SARL</div>
+      <div class="period">Janvier 2023 – Février 2024 · 13 mois</div>
+      <ul>
+        <li>Architecture d'un système IoT embarqué : biométrie + sécurité routière</li>
+        <li>Interface HMI Python/Qt pour supervision à distance en temps réel</li>
+        <li>Architecture IoT (MQTT, REST API) sécurisée</li>
+        <li>Livré dans les délais avec 15 % de réduction des coûts</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item">
+      <div class="role">Technologue en automatisation | Chef de projet technique</div>
+      <div class="company">FETRAINING SARL</div>
+      <div class="period">Mars 2021 – Janvier 2023 · 21 mois</div>
+      <ul>
+        <li>Machine CNC 3 axes : programmation PLC Siemens, modélisation 3D, mise en service</li>
+        <li>Gestion CAPEX : 20 % de réduction des délais, +25 % d'efficacité de production</li>
+        <li>Formation sur PLC, microcontrôleurs et détection d'objets</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item">
+      <div class="role">Électrotechnicien</div>
+      <div class="company">SATCAM</div>
+      <div class="period">Décembre 2016 – Février 2018 · 14 mois</div>
+      <ul>
+        <li>Installation électrique, schémas d'armoires de distribution</li>
+        <li>Maintenance préventive et corrective</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- EDUCATION -->
+<section>
+  <h2>// <span>Formation</span></h2>
+  <div class="timeline">
+
+    <div class="timeline-item">
+      <div class="role">Cours universitaires — Alignement normes nord-américaines</div>
+      <div class="company">Université du Québec à Trois-Rivières (UQTR)</div>
+      <div class="period">2025 – 2026 · Québec, Canada</div>
+      <ul><li>Transformateurs · Automatisation · Systèmes embarqués</li></ul>
+    </div>
+
+    <div class="timeline-item">
+      <div class="role">Diplôme d'ingénieur en robotique industrielle</div>
+      <div class="company">École Nationale Supérieure Polytechnique de Douala</div>
+      <div class="period">2021 · Cameroun</div>
+      <ul><li>Équivalence canadienne : Baccalauréat en génie électrique et informatique</li></ul>
+    </div>
+
+    <div class="timeline-item">
+      <div class="role">Baccalauréat en électrotechnique</div>
+      <div class="company">Lycée Technique de Bafang</div>
+      <div class="period">2015 · Cameroun</div>
+      <ul><li>Équivalence canadienne : DES Électrotechnique</li></ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>Sylvain Ngacham · <a href="mailto:sylvainngacham59@gmail.com">sylvainngacham59@gmail.com</a> · (+1) 581-578-4438</p>
+  <p style="margin-top:0.4rem">
+    <a href="https://github.com/FrankNya05">GitHub</a> ·
+    <a href="https://www.linkedin.com/in/sylvainngacham">LinkedIn</a>
+  </p>
+</footer>
+
+</body>
+</html>
