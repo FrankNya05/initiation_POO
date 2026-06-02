@@ -225,8 +225,11 @@ void taskStrategy(void* pvParameters)
                 // Attendre la fin de la calibration lidar avant de démarrer
                 if (!ctx.isLidarCalibDone()) {
                     LOG("[Strategy] Attente calibration zone morte lidar...");
-                    while (!ctx.isLidarCalibDone())
+                    uint32_t _calibTimeout = millis() + 3000;
+                    while (!ctx.isLidarCalibDone() && millis() < _calibTimeout)
                         vTaskDelay(pdMS_TO_TICKS(50));
+                    if (!ctx.isLidarCalibDone())
+                        LOG("[Strategy] Timeout calibration lidar — démarrage quand même");
                 }
                 LOG("[Strategy] Départ dans 5 secondes...");
                 ctx.setMotorSpeeds({});           // moteurs arrêtés pendant l'attente
