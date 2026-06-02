@@ -1,5 +1,7 @@
 # Mini Sumo Robot — ESP32
 
+**Auteur :** Sylvain Ngacham
+
 Projet d'initiation à la programmation orientée objet embarquée sur ESP32.  
 Le robot exécute des stratégies autonomes (carré, triangle, recherche lidar) controlées via MQTT/WiFi.
 
