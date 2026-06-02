@@ -1,124 +1,149 @@
-# initiation_POO
-                       Structure de l'architecture
+# Mini Sumo Robot — ESP32
 
-MiniSumoRobot/
-│
-├── src/
-│   └── main.cpp
-│
-├── lib/
-│   ├── Core/
-│   │   ├── RobotContext.cpp
-│   │   └── RobotContext.h
-│   │
-│   ├── Sensors/
-│   │   └── (capteurs individuels)
-│   │
-│   ├── Actuators/
-│   │   └── (drivers moteurs, PWM…)
-│   │
-│   ├── Communication/
-│   │   ├── BLEComm.cpp
-│   │   ├── BLEComm.h
-│   │   ├── WiFiComm.cpp
-│   │   ├── WiFiComm.h
-│   │   ├── CommandParser.cpp
-│   │   ├── CommandParser.h
-│   │   └── ICommInterface.h
-│   │
-│   ├── RTOS/
-│   │   ├── Tasks.cpp
-│   │   ├── Tasks.h
-│   │   ├── Queues.cpp
-│   │   └── Queues.h
-│   │
-│   └── config/
-│       ├── PinConfig.hpp
-│       ├── RobotConstants.hpp
-│       ├── RTOSConfig.hpp
-│       └── CommConfig.hpp
-│
-└── test/
-    └── test_motor/
+Projet d'initiation à la programmation orientée objet embarquée sur ESP32.  
+Le robot exécute des stratégies autonomes (carré, triangle, recherche lidar) controlées via MQTT/WiFi.
 
-🧠 Philosophie de l’architecture
-L’objectif est de séparer clairement :
-- Le matériel (drivers capteurs, moteurs)
-- La logique (RobotContext, comportements)
-- La communication (BLE, WiFi, parser)
-- Le temps réel (tâches FreeRTOS, queues)
-- La configuration (pins, seuils, constantes)
-Cette séparation garantit :
-- une meilleure lisibilité
-- une maintenance simplifiée
-- une évolution rapide du robot
-- des tests unitaires plus faciles
-- une réutilisation des modules dans d’autres projets
+---
 
-🧩 Description des modules
-Core/
-Contient la logique centrale du robot.
-- RobotContext : point d’accès global aux modules
-- Gestion des états (Idle, Search, Attack…)
-- Coordination capteurs ↔ moteurs ↔ communication
+## Matériel requis
 
-Sensors/
-Chaque capteur est un module indépendant.
-- Drivers bas niveau (ADC, I2C, GPIO)
-- Fonctions haut niveau (détection, normalisation)
-- Interface simple pour le Core
+| Composant | Détails |
+|---|---|
+| Microcontrôleur | ESP32 DevKit |
+| IMU | MPU-6050 (I2C, addr 0x68) |
+| Lidar | TF-Luna ou compatible UART |
+| Moteurs | 2× N20 50:1, 1400 PPR |
+| Capteurs de ligne | 3× IR analogique (avant-gauche, avant-droit, arrière) |
+| TOF | 2× VL53L0X (avant-gauche, avant-droit) |
+| Batterie | 2S LiPo (7.4V nominal) |
 
-Actuators/
-Tout ce qui agit sur le robot.
-- Contrôle moteur (PWM, direction)
-- Fonctions haut niveau :
-- forward()
-- turnLeft()
-- stop()
+---
 
-Communication/
-Gestion des interfaces externes.
-- BLE
-- WiFi
-- Interface commune ICommInterface
-- CommandParser pour interpréter les commandes reçues
+## Installation
 
-RTOS/
-Gestion du temps réel.
-- Tâches périodiques (SensorsTask, MotorTask, CommTask…)
-- Queues pour échanger des messages
-- Priorités, timing, synchronisation
+### 1. Prérequis
+- [PlatformIO](https://platformio.org/) (VS Code extension ou CLI)
+- Python 3.x + `paho-mqtt` (`pip install paho-mqtt`)
+- Broker MQTT (ex: Mosquitto via Docker)
 
-config/
-Centralise toutes les constantes du robot.
-- Pins GPIO
-- Seuils capteurs
-- Paramètres moteurs
-- Paramètres RTOS
-- Paramètres communication
+### 2. Cloner le dépôt
+```bash
+git clone https://github.com/FrankNya05/initiation_POO.git
+cd initiation_POO/esp32
+```
 
-🚀 Démarrage rapide
-1. Initialiser les modules
-Dans main.cpp :
-RobotContext robot;
+### 3. Configurer le WiFi et MQTT
+Dans `src/main.cpp`, modifier :
+```cpp
+static constexpr const char* WIFI_SSID      = "ton_reseau";
+static constexpr const char* WIFI_PASS      = "ton_mot_de_passe";
+static constexpr const char* MQTT_BROKER_IP = "192.168.x.x";
+```
 
-robot.initSensors();
-robot.initActuators();
-robot.initCommunication();
-robot.initRTOS();
+### 4. Flasher le robot
+```bash
+# Premier flash (USB)
+pio run -e esp32dev --target upload
 
+# Flash suivants (OTA WiFi)
+pio run -e esp32_ota --target upload
+```
 
-2. Lancer les tâches RTOS
-startTasks(robot);
-vTaskStartScheduler();
+---
 
+## Démarrage
 
+1. Allumer le robot — la LED fait rouge → vert → bleu (séquence de boot, ~5s)
+2. Le robot se connecte au WiFi et au broker MQTT
+3. **LED jaune** = STANDBY (en attente)
 
-🧪 Tests
-Le dossier test/ contient des tests unitaires pour les moteurs, capteurs ou modules critiques.
+### Démarrer une stratégie
 
-📌 Objectifs du projet
-- Architecture modulaire, propre et évolutive
-- Séparation claire hardware / logique / RTOS
-- Code réutilisable pour d’autres robots
-- Base solide pour compétitions MiniSumo
+**Via bouton physique :**
+- Appui court → délai réglementaire 5s → GO
+
+**Via MQTT :**
+```bash
+# Choisir une stratégie
+mosquitto_pub -h <broker_ip> -t "robot/cmd" -m "STRATEGY:Triangle"
+
+# Démarrer
+mosquitto_pub -h <broker_ip> -t "robot/cmd" -m "START"
+```
+
+---
+
+## Commandes MQTT
+
+Topic de commande : `robot/cmd`
+
+| Commande | Description |
+|---|---|
+| `START` | Démarre le robot (délai 5s) |
+| `STOP` | Arrêt d'urgence → STANDBY |
+| `STRATEGY:<nom>` | Change de stratégie |
+| `POSE:RESET` | Remet la position EKF à (0, 0, 0°) |
+| `MOTOR:L:<v>:R:<v>` | Commande directe moteurs (-255 à 255) |
+| `MOTOR:STOP` | Arrêt moteurs |
+| `PID:KP:<v>` | Réglage gain proportionnel vitesse |
+| `PID:KI:<v>` | Réglage gain intégral vitesse |
+| `PID:YAW:KP:<v>` | Réglage PID cap |
+| `LED:R:<v>:G:<v>:B:<v>` | Contrôle LED RGB (0-255) |
+
+---
+
+## Stratégies disponibles
+
+| Nom | Description |
+|---|---|
+| `Triangle` | Trace un triangle équilatéral (~500mm de côté), oriente et revient à l'origine |
+| `Square` | Trace un carré |
+| `Seek` | Détecte et poursuit l'adversaire via lidar |
+| `Track` | Suit une cible |
+| `Circle` | Tourne en cercle sur le dohyo |
+| `Adamantine` | Stratégie défensive |
+| `Berserker` | Attaque agressive |
+
+Exemple :
+```bash
+mosquitto_pub -h <broker_ip> -t "robot/cmd" -m "STRATEGY:Seek"
+mosquitto_pub -h <broker_ip> -t "robot/cmd" -m "START"
+```
+
+---
+
+## Télémétrie
+
+Topic : `robot/telemetry` (JSON, ~10 Hz)
+
+```json
+{
+  "type": "TELEMETRY",
+  "payload": {
+    "ts": 123456,
+    "pose":     { "x": 12.3, "y": 4.5, "theta": 0.12 },
+    "motors":   { "left": 150, "right": 150 },
+    "imu":      { "ax": 9.8, "gx": 0.02 },
+    "encoders": { "leftRpm": 85.0, "rightRpm": 85.0 },
+    "lidar":    { "dist": 0.45, "angle": 355.0, "valid": true },
+    "battery":  { "voltage": 7.4, "percent": 80 },
+    "line":     { "frontLeft": false, "frontRight": false, "back": false },
+    "tof":      { "frontLeft": 120, "frontRight": 115 }
+  }
+}
+```
+
+Pour écouter :
+```bash
+mosquitto_sub -h <broker_ip> -t "robot/telemetry"
+```
+
+---
+
+## Contrôle du bouton start
+
+| Appui | Action |
+|---|---|
+| Court (< 800ms) | Démarre la stratégie courante (délai 5s) |
+| Long (≥ 800ms) | Arrêt d'urgence |
+| Double appui rapide | Cycle vers la stratégie suivante |
