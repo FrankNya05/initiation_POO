@@ -1,4 +1,4 @@
-# Mini Sumo Robot — ESP32
+# Mini Sumo Robot — Embarqué & IoT
 
 **Auteur :** Sylvain Ngacham
 
