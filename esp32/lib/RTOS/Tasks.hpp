@@ -173,59 +173,78 @@ void taskLidar(void* pvParameters)
     p->lidar->init();
 
     uint32_t lastScanPub = 0;
+    
+    // Variable pour mémoriser le dernier état connu et ne traiter que les transitions
+    RobotConstants::State lastState = RobotConstants::State::STANDBY; 
 
     for (;;) {
+        // 1. Traiter les paquets séries s'il y en a
         p->lidar->waitAndProcess();
+        
         auto& ctx = RobotContext::instance();
+        RobotConstants::State currentState = ctx.getState();
+
+        // 2. Mettre à jour le contexte global
         ctx.setLidarData(p->lidar->getData());
         ctx.setLidarCalibDone(p->lidar->isCalibDone());
-        if (ctx.getState() == RobotConstants::State::STANDBY) {
-            p->lidar->stop();
-        }else{
-            p->lidar->start();
+
+        // 3. Gestion intelligente du Start/Stop (Uniquement sur changement d'état)
+        if (currentState != lastState) {
+            if (currentState == RobotConstants::State::STANDBY) {
+                p->lidar->stop();
+                LOG("[taskLidar] Transition vers STANDBY : Arrêt du LiDAR.");
+            } else if (lastState == RobotConstants::State::STANDBY) {
+                // On ne redémarre que si on SORT du mode STANDBY
+                p->lidar->start();
+                LOG("[taskLidar] Sortie de STANDBY : Démarrage du LiDAR.");
+            }
+            lastState = currentState; // Sauvegarde du nouvel état
         }
-        // Publier le scan brut à 1 Hz
+
+        // 4. Publier le scan brut (Toutes les 2000 ms)
         uint32_t now = millis();
         if (p->comm->isConnected() && (now - lastScanPub) >= 2000) {
             lastScanPub = now;
-            const LidarSensor::ScanPoint* pts = p->lidar->getRawScan();
-            uint16_t n = p->lidar->getRawScanCount();
+            
+            // On ne publie un JSON que si le LiDAR est actif pour éviter d'envoyer des scans vides
+            if (currentState != RobotConstants::State::STANDBY) {
+                const LidarSensor::ScanPoint* pts = p->lidar->getRawScan();
+                uint16_t n = p->lidar->getRawScanCount();
 
-            // Décimation : 1 point tous les 2° (angle bin de 2°)
-            static constexpr float BIN_DEG = 5.0f;
-            static constexpr uint16_t NBINS = 72;
-            float binDist[NBINS];
-            uint8_t binQual[NBINS];
-            bool binFilled[NBINS];
-            memset(binFilled, 0, sizeof(binFilled));
+                static constexpr float BIN_DEG = 5.0f;
+                static constexpr uint16_t NBINS = 72;
+                float binDist[NBINS];
+                uint8_t binQual[NBINS];
+                bool binFilled[NBINS];
+                memset(binFilled, 0, sizeof(binFilled));
 
-            for (uint16_t i = 0; i < n; i++) {
-                if (pts[i].dist < 0.001f) continue;
-                uint16_t b = (uint16_t)(pts[i].angle / BIN_DEG) % NBINS;
-                if (!binFilled[b] || pts[i].dist < binDist[b]) {
-                    binDist[b]   = pts[i].dist;
-                    binQual[b]   = pts[i].quality;
-                    binFilled[b] = true;
+                for (uint16_t i = 0; i < n; i++) {
+                    if (pts[i].dist < 0.001f) continue;
+                    uint16_t b = (uint16_t)(pts[i].angle / BIN_DEG) % NBINS;
+                    if (!binFilled[b] || pts[i].dist < binDist[b]) {
+                        binDist[b]   = pts[i].dist;
+                        binQual[b]   = pts[i].quality;
+                        binFilled[b] = true;
+                    }
                 }
-            }
 
-            std::string msg = "{\"type\":\"LIDAR_SCAN\",\"points\":[";
-            char tmp[48];
-            bool first = true;
-            for (uint16_t b = 0; b < NBINS; b++) {
-                if (!binFilled[b]) continue;
-                snprintf(tmp, sizeof(tmp), "%s{\"a\":%.0f,\"d\":%.3f,\"q\":%u}",
-                         first ? "" : ",",
-                         b * BIN_DEG, binDist[b], binQual[b]);
-                msg += tmp;
-                first = false;
+                std::string msg = "{\"type\":\"LIDAR_SCAN\",\"points\":[";
+                char tmp[48];
+                bool first = true;
+                for (uint16_t b = 0; b < NBINS; b++) {
+                    if (!binFilled[b]) continue;
+                    snprintf(tmp, sizeof(tmp), "%s{\"a\":%.0f,\"d\":%.3f,\"q\":%u}",
+                             first ? "" : ",",
+                             b * BIN_DEG, binDist[b], binQual[b]);
+                    msg += tmp;
+                    first = false;
+                }
+                msg += "]}";
+                p->comm->sendTo("robot/lidar_scan", msg);
             }
-            msg += "]}";
-            p->comm->sendTo("robot/lidar_scan", msg);
         }
     }
 }
-
 // ───────────────────────────────────────────────────────────────
 //  taskOTA — 100 Hz, Core 0, Prio 1
 //  Appelle ArduinoOTA.handle() pour permettre le flash WiFi.
