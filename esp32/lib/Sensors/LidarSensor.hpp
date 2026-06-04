@@ -149,6 +149,7 @@ public:
     void stop() {
         const uint8_t cmd[] = { LidarProtocol::CMD_PREFIX, LidarProtocol::CMD_STOP };
         uart_write_bytes(UART_NUM_2, cmd, sizeof(cmd));
+        _started = false;
     }
     void start() {
     // Si déjà démarré, on ne fait rien

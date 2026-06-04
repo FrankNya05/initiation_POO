@@ -110,11 +110,6 @@ void taskSensors(void* pvParameters)
 
         auto& ctx = RobotContext::instance();
 
-        // Lidar (FRONT) — distance + angle de l'adversaire
-        ctx.setLidarData(
-            sensors->getDataByPosition(SensorPosition::FRONT)
-        );
-
         // TOF — avant-gauche et avant-droit (filtre par type pour éviter
         // la collision avec les LineSensors à la même position)
         ctx.setTOFData(SensorPosition::FRONT_LEFT,
@@ -173,41 +168,42 @@ void taskLidar(void* pvParameters)
     p->lidar->init();
 
     uint32_t lastScanPub = 0;
-    
-    // Variable pour mémoriser le dernier état connu et ne traiter que les transitions
-    RobotConstants::State lastState = RobotConstants::State::STANDBY; 
+    bool     lastEnabled = false;
 
     for (;;) {
-        // 1. Traiter les paquets séries s'il y en a
-        p->lidar->waitAndProcess();
-        
         auto& ctx = RobotContext::instance();
-        RobotConstants::State currentState = ctx.getState();
+        bool enabled = ctx.isLidarEnabled();
 
-        // 2. Mettre à jour le contexte global
-        ctx.setLidarData(p->lidar->getData());
-        ctx.setLidarCalibDone(p->lidar->isCalibDone());
-
-        // 3. Gestion intelligente du Start/Stop (Uniquement sur changement d'état)
-        if (currentState != lastState) {
-            if (currentState == RobotConstants::State::STANDBY) {
-                p->lidar->stop();
-                LOG("[taskLidar] Transition vers STANDBY : Arrêt du LiDAR.");
-            } else if (lastState == RobotConstants::State::STANDBY) {
-                // On ne redémarre que si on SORT du mode STANDBY
+        // 1. Start/Stop sur transition du flag — avant waitAndProcess()
+        //    pour éviter que _handleStartup() envoie CMD_START alors que
+        //    le lidar doit rester éteint.
+        if (enabled != lastEnabled) {
+            if (enabled) {
                 p->lidar->start();
-                LOG("[taskLidar] Sortie de STANDBY : Démarrage du LiDAR.");
+                LOG("[taskLidar] Démarrage LiDAR.");
+            } else {
+                p->lidar->stop();
+                LOG("[taskLidar] Arrêt LiDAR.");
             }
-            lastState = currentState; // Sauvegarde du nouvel état
+            lastEnabled = enabled;
         }
 
-        // 4. Publier le scan brut (Toutes les 2000 ms)
+        // 2. Traiter les paquets seulement si actif
+        //    (waitAndProcess appelle _handleStartup qui enverrait CMD_START)
+        if (enabled) {
+            p->lidar->waitAndProcess();
+            ctx.setLidarData(p->lidar->getData());
+            ctx.setLidarCalibDone(p->lidar->isCalibDone());
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+
+        // 3. Publier le scan brut (Toutes les 2000 ms)
         uint32_t now = millis();
         if (p->comm->isConnected() && (now - lastScanPub) >= 2000) {
             lastScanPub = now;
-            
-            // On ne publie un JSON que si le LiDAR est actif pour éviter d'envoyer des scans vides
-            if (currentState != RobotConstants::State::STANDBY) {
+
+            if (enabled) {
                 const LidarSensor::ScanPoint* pts = p->lidar->getRawScan();
                 uint16_t n = p->lidar->getRawScanCount();
 
@@ -318,6 +314,7 @@ void taskStrategy(void* pvParameters)
                 LOG("[Strategy] Arrêt d'urgence");
                 ctx.setState(RobotConstants::State::STANDBY);
                 ctx.setMotorSpeeds({});
+                ctx.setLidarEnabled(false);
             }
 
             // Double appui rapide → cycle de stratégie
@@ -341,6 +338,7 @@ void taskStrategy(void* pvParameters)
 
         // ── Exécution stratégie (seulement hors STANDBY) ─────
         if (state != RobotConstants::State::STANDBY) {
+            ctx.setLidarEnabled(true);   // défaut ON — la stratégie peut écraser à false
             RobotConstants::ActionCommand cmd = manager->executeStrategy(ctx);
             ctx.setMotorSpeeds(cmd);
         } else {
@@ -707,7 +705,8 @@ void taskCommand(void* pvParameters)
 
             case CommandType::STOP:
                 ctx.setState(RobotConstants::State::STANDBY);
-                ctx.setMotorSpeeds({});  // STOP moteurs
+                ctx.setMotorSpeeds({});
+                ctx.setLidarEnabled(false);
                 break;
 
             case CommandType::RESET:

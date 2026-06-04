@@ -29,7 +29,6 @@ public:
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
 
         using AC = RobotConstants::ActionCommand;
-        ctx.setLidarEnabled(false);
 
         uint32_t now = millis();
 

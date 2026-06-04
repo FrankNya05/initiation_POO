@@ -254,10 +254,12 @@ void loop() {
         encL.rpm, encR.rpm, rpmDiff,
         rpmDiff >  3.0f ? "(R trop rapide)" :
         rpmDiff < -3.0f ? "(L trop rapide)" : "(equilibre)");
+    int dispPwmL = cmd.isStop() ? 0 : ekfParams.lastPwmLeft;
+    int dispPwmR = cmd.isStop() ? 0 : ekfParams.lastPwmRight;
     Serial.printf("PWM    L=%4d  R=%4d   correction PID: L=%+d  R=%+d\n",
-        ekfParams.lastPwmLeft, ekfParams.lastPwmRight,
-        ekfParams.lastPwmLeft  - cmd.leftSpeed,
-        ekfParams.lastPwmRight - cmd.rightSpeed);
+        dispPwmL, dispPwmR,
+        dispPwmL - cmd.leftSpeed,
+        dispPwmR - cmd.rightSpeed);
 
     // ── Diagnostics secondaires ───────────────────────────────
     Serial.printf("LINE   FL=%s(%4d)  FR=%s(%4d)  B=%s(%4d)\n",

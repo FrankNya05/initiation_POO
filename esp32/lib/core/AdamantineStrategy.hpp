@@ -31,7 +31,6 @@ public:
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
 
         using AC = RobotConstants::ActionCommand;
-        ctx.setLidarEnabled(true);
 
         // ── 0. EVADE verrouillé — durée minimale garantie ─────
         uint32_t now = millis();
