@@ -155,18 +155,74 @@ void taskSensors(void* pvParameters)
 }
 
 // ───────────────────────────────────────────────────────────────
+//  Paramètres de taskLidar
+// ───────────────────────────────────────────────────────────────
+struct LidarTaskParams {
+    LidarSensor*          lidar;
+    CommunicationManager* comm;
+};
+
+// ───────────────────────────────────────────────────────────────
 //  taskLidar — DMA UART, Core 1, Prio 2
 //  Attend un paquet lidar (bloquant), met à jour RobotContext.
+//  Publie le scan brut sur robot/lidar_scan à 1 Hz.
 // ───────────────────────────────────────────────────────────────
 void taskLidar(void* pvParameters)
 {
-    LidarSensor* lidar = static_cast<LidarSensor*>(pvParameters);
-    lidar->init();
+    LidarTaskParams* p = static_cast<LidarTaskParams*>(pvParameters);
+    p->lidar->init();
+
+    uint32_t lastScanPub = 0;
+
     for (;;) {
-        lidar->waitAndProcess();
+        p->lidar->waitAndProcess();
         auto& ctx = RobotContext::instance();
-        ctx.setLidarData(lidar->getData());
-        ctx.setLidarCalibDone(lidar->isCalibDone());
+        ctx.setLidarData(p->lidar->getData());
+        ctx.setLidarCalibDone(p->lidar->isCalibDone());
+        if (ctx.getState() == RobotConstants::State::STANDBY) {
+            p->lidar->stop();
+        }else{
+            p->lidar->start();
+        }
+        // Publier le scan brut à 1 Hz
+        uint32_t now = millis();
+        if (p->comm->isConnected() && (now - lastScanPub) >= 2000) {
+            lastScanPub = now;
+            const LidarSensor::ScanPoint* pts = p->lidar->getRawScan();
+            uint16_t n = p->lidar->getRawScanCount();
+
+            // Décimation : 1 point tous les 2° (angle bin de 2°)
+            static constexpr float BIN_DEG = 5.0f;
+            static constexpr uint16_t NBINS = 72;
+            float binDist[NBINS];
+            uint8_t binQual[NBINS];
+            bool binFilled[NBINS];
+            memset(binFilled, 0, sizeof(binFilled));
+
+            for (uint16_t i = 0; i < n; i++) {
+                if (pts[i].dist < 0.001f) continue;
+                uint16_t b = (uint16_t)(pts[i].angle / BIN_DEG) % NBINS;
+                if (!binFilled[b] || pts[i].dist < binDist[b]) {
+                    binDist[b]   = pts[i].dist;
+                    binQual[b]   = pts[i].quality;
+                    binFilled[b] = true;
+                }
+            }
+
+            std::string msg = "{\"type\":\"LIDAR_SCAN\",\"points\":[";
+            char tmp[48];
+            bool first = true;
+            for (uint16_t b = 0; b < NBINS; b++) {
+                if (!binFilled[b]) continue;
+                snprintf(tmp, sizeof(tmp), "%s{\"a\":%.0f,\"d\":%.3f,\"q\":%u}",
+                         first ? "" : ",",
+                         b * BIN_DEG, binDist[b], binQual[b]);
+                msg += tmp;
+                first = false;
+            }
+            msg += "]}";
+            p->comm->sendTo("robot/lidar_scan", msg);
+        }
     }
 }
 
@@ -268,6 +324,8 @@ void taskStrategy(void* pvParameters)
         if (state != RobotConstants::State::STANDBY) {
             RobotConstants::ActionCommand cmd = manager->executeStrategy(ctx);
             ctx.setMotorSpeeds(cmd);
+        } else {
+            ctx.setLidarEnabled(false);
         }
 
         vTaskDelay(RTOSConfig::PERIOD_STRATEGY);

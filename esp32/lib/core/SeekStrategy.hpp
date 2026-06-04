@@ -56,14 +56,14 @@ public:
             }
         }
 
-        // ── Rotation de recherche ─────────────────────────────
+        // ── Attente : robot immobile jusqu'à détection lidar ─────
         ctx.setState(RobotConstants::State::SEARCH);
-        return AC{ SPEED_SEARCH, -SPEED_SEARCH };
+        return AC{ 0, 0 };
     }
 
 private:
-    static constexpr float FRONT_DEG     =   0.0f; // avant du robot (mesuré empiriquement)
-    static constexpr float FRONT_ARC_DEG =  90.0f; // demi-angle de l'arc avant
+    static constexpr float FRONT_DEG     =  10.0f; // avant du robot (mesuré sur scan brut lidar)
+    static constexpr float FRONT_ARC_DEG =  70.0f; // demi-angle de l'arc avant (évite le mur latéral à 83°)
     static constexpr float MIN_DIST_M    =  0.15f;
     static constexpr float MAX_DIST_M    =  0.8f;
     static constexpr int   SPEED_FWD     = 180;

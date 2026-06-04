@@ -27,7 +27,7 @@
 
 static constexpr const char* WIFI_SSID       = "S25Ultra";
 static constexpr const char* WIFI_PASS       = "sylvain123";
-static constexpr const char* MQTT_BROKER_IP  = "10.98.51.191";
+static constexpr const char* MQTT_BROKER_IP  = "10.141.137.191";
 static constexpr uint16_t    MQTT_PORT       = 1883;
 static constexpr const char* MQTT_TOPIC_PUB  = "robot/telemetry";
 static constexpr const char* MQTT_TOPIC_SUB  = "robot/cmd";
@@ -66,6 +66,7 @@ static float g_pidKp = 2.0f, g_pidKi = 0.15f, g_pidKd = 0.0f;
 
 LidarSensor          lidar;
 CommunicationManager comm;
+LidarTaskParams      lidarParams { &lidar, &comm };
 
 static void onStrategyCmd(const char* name) {
     if (stratManager.setByName(name))
@@ -189,7 +190,7 @@ void setup() {
 
     xTaskCreatePinnedToCore(taskLed,      "LED",      RTOSConfig::STACK_LED,      &ledParams,     RTOSConfig::PRIO_LED,      nullptr, RTOSConfig::CORE_LED);
     xTaskCreatePinnedToCore(taskSensors,  "SENSORS",  RTOSConfig::STACK_SENSORS,  &sensorManager, RTOSConfig::PRIO_SENSORS,  nullptr, RTOSConfig::CORE_SENSORS);
-    xTaskCreatePinnedToCore(taskLidar,    "LIDAR",    RTOSConfig::STACK_LIDAR,    &lidar,         RTOSConfig::PRIO_LIDAR,    nullptr, RTOSConfig::CORE_LIDAR);
+    xTaskCreatePinnedToCore(taskLidar,    "LIDAR",    RTOSConfig::STACK_LIDAR,    &lidarParams,   RTOSConfig::PRIO_LIDAR,    nullptr, RTOSConfig::CORE_LIDAR);
     xTaskCreatePinnedToCore(taskStrategy, "STRATEGY", RTOSConfig::STACK_STRATEGY, &stratManager,  RTOSConfig::PRIO_STRATEGY, nullptr, RTOSConfig::CORE_STRATEGY);
     xTaskCreatePinnedToCore(taskEncoders, "ENCODERS", RTOSConfig::STACK_ENCODER,  &ekfParams,     RTOSConfig::PRIO_ENCODER,  nullptr, RTOSConfig::CORE_ENCODER);
     xTaskCreatePinnedToCore(taskComm,     "COMM",     RTOSConfig::STACK_COMM,     &comm,          RTOSConfig::PRIO_COMM,     &g_commTask, RTOSConfig::CORE_COMM);
@@ -270,5 +271,6 @@ void loop() {
     Serial.printf("BATT   %.2f V  [%s]   MQTT %s\n",
         batt.value.scalar, batt.isValid ? "OK" : "ERR",
         comm.isConnected() ? "connecte" : "deconnecte");
+    Serial.printf("RAM disponible : %d octets\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     vTaskDelay(pdMS_TO_TICKS(500));  // 2 Hz pour voir la rotation en temps réel
 }
