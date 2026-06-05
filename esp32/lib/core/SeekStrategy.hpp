@@ -23,6 +23,9 @@ public:
         _searchDeadline = 0;
         _rotateStart    = 0.0f;
         _wasInAttack    = false;
+        _hasLock        = false;
+        _lockLostAt     = 0;
+        _chargeMode     = false;
     }
 
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
@@ -54,6 +57,10 @@ public:
                         }
                     }
 
+                    // Verrouillage : mémorise le dernier angle valide
+                    _hasLock    = true;
+                    _lockAngle  = angle;
+                    _lockLostAt = 0;
                     _wasInAttack = true;
                     ctx.setState(RobotConstants::State::ATTACK);
                     return AC{ l, r };
@@ -61,10 +68,69 @@ public:
             }
         }
 
+        // ── TOF : détection courte portée ────────────────────────
+        // Complémente le lidar quand l'adversaire est très proche
+        // ou dans la zone morte lidar. Si un seul capteur détecte,
+        // on tourne vers lui pour le ramener dans l'axe.
+        {
+            SensorData tofFL = ctx.getTOFData(SensorPosition::FRONT_LEFT);
+            SensorData tofFR = ctx.getTOFData(SensorPosition::FRONT_RIGHT);
+            bool tofL = tofFL.isValid
+                     && tofFL.value.scalar > TOF_MIN_MM
+                     && tofFL.value.scalar < TOF_MAX_MM;
+            bool tofR = tofFR.isValid
+                     && tofFR.value.scalar > TOF_MIN_MM
+                     && tofFR.value.scalar < TOF_MAX_MM;
+
+            if (tofL && tofR) {
+                // Les deux TOF confirment → cible verrouillée en face → charge
+                _hasLock     = true;
+                _lockLostAt  = 0;
+                _chargeMode  = true;
+                _wasInAttack = true;
+                ctx.setState(RobotConstants::State::ATTACK);
+                return AC{ SPEED_CHARGE, SPEED_CHARGE };
+            }
+
+            if (tofL || tofR) {
+                // Un seul TOF → cible de côté → aligner
+                _hasLock    = true;
+                _lockLostAt = 0;
+                _lockAngle  = tofL ? FRONT_DEG - 45.0f : FRONT_DEG + 45.0f;
+                _wasInAttack = true;
+                int l = tofL ? SPEED_TOF_TURN : SPEED_FWD;
+                int r = tofR ? SPEED_TOF_TURN : SPEED_FWD;
+                ctx.setState(RobotConstants::State::ATTACK);
+                return AC{ l, r };
+            }
+        }
+
+        // ── Grace period : cible perdue mais lock actif ───────────
+        // Continue l'attaque vers le dernier angle connu pendant
+        // LOCK_GRACE_MS avant de passer en SEARCH.
+        if (_hasLock) {
+            if (_lockLostAt == 0) _lockLostAt = millis();
+
+            if (millis() - _lockLostAt < LOCK_GRACE_MS) {
+                ctx.setState(RobotConstants::State::ATTACK);
+                if (_chargeMode) {
+                    // Charge confirmée → maintenir pleine vitesse
+                    return AC{ SPEED_CHARGE, SPEED_CHARGE };
+                }
+                // Alignement → steering vers dernier angle connu
+                float diff = _lockAngle - FRONT_DEG;
+                if (diff >  180.0f) diff -= 360.0f;
+                if (diff < -180.0f) diff += 360.0f;
+                float diffNorm = constrain(diff / 90.0f, -1.0f, 1.0f);
+                int l = constrain((int)(SPEED_FWD * (1.0f + diffNorm)), 0, 255);
+                int r = constrain((int)(SPEED_FWD * (1.0f - diffNorm)), 0, 255);
+                return AC{ l, r };
+            }
+            _hasLock    = false;
+            _chargeMode = false;
+        }
+
         // ── SEARCH : rotation par pas de 30° ─────────────────────
-        // Après perte de cible → attendre SEARCH_WAIT_MS (laisse le
-        // temps au lidar de compléter un tour propre), puis pivoter
-        // de SEARCH_STEP_RAD, répéter jusqu'à détection.
         if (_wasInAttack) {
             _wasInAttack    = false;
             _searchPhase    = SearchPhase::WAIT;
@@ -100,15 +166,20 @@ public:
 
 private:
     static constexpr float    FRONT_DEG        =  10.0f;
-    static constexpr float    FRONT_ARC_DEG    =  70.0f;
+    static constexpr float    FRONT_ARC_DEG    =  90.0f;
     static constexpr float    MIN_DIST_M       =  0.15f;
     static constexpr float    MAX_DIST_M       =  0.8f;
     static constexpr int      SPEED_FWD        = 180;
     static constexpr float    ENC_KP           = 0.5f;
 
-    static constexpr uint32_t SEARCH_WAIT_MS   = 500;
+    static constexpr uint32_t SEARCH_WAIT_MS   = 150;
     static constexpr float    SEARCH_STEP_RAD  = (float)M_PI / 6.0f;  // 30°
     static constexpr int      SPEED_SEARCH     = 150;
+    static constexpr uint32_t LOCK_GRACE_MS    = 500;
+    static constexpr float    TOF_MIN_MM       =  80.0f;
+    static constexpr float    TOF_MAX_MM       = 280.0f;
+    static constexpr int      SPEED_TOF_TURN   =  80;
+    static constexpr int      SPEED_CHARGE     = 255;
 
     enum class SearchPhase : uint8_t { WAIT, ROTATE };
 
@@ -116,4 +187,9 @@ private:
     uint32_t    _searchDeadline = 0;
     float       _rotateStart    = 0.0f;
     bool        _wasInAttack    = false;
+
+    bool        _hasLock        = false;
+    float       _lockAngle      = 0.0f;
+    uint32_t    _lockLostAt     = 0;
+    bool        _chargeMode     = false;
 };

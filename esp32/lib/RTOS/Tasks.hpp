@@ -327,7 +327,7 @@ void taskStrategy(void* pvParameters)
 
         // ── Protection batterie ───────────────────────────────
         SensorData batt = ctx.getBattData();
-        if (batt.isValid && batt.value.scalar > 0.0f && batt.value.scalar <= 6.20f &&
+        if (batt.isValid && batt.value.scalar > 0.0f && batt.value.scalar <= 5.80f &&
             state != RobotConstants::State::STANDBY) {
             LOG("[Strategy] BATTERIE CRITIQUE → STANDBY force");
             ctx.setState(RobotConstants::State::STANDBY);
