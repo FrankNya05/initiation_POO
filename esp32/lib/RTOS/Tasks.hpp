@@ -110,11 +110,6 @@ void taskSensors(void* pvParameters)
 
         auto& ctx = RobotContext::instance();
 
-        // Lidar (FRONT) — distance + angle de l'adversaire
-        ctx.setLidarData(
-            sensors->getDataByPosition(SensorPosition::FRONT)
-        );
-
         // TOF — avant-gauche et avant-droit (filtre par type pour éviter
         // la collision avec les LineSensors à la même position)
         ctx.setTOFData(SensorPosition::FRONT_LEFT,
@@ -155,21 +150,97 @@ void taskSensors(void* pvParameters)
 }
 
 // ───────────────────────────────────────────────────────────────
+//  Paramètres de taskLidar
+// ───────────────────────────────────────────────────────────────
+struct LidarTaskParams {
+    LidarSensor*          lidar;
+    CommunicationManager* comm;
+};
+
+// ───────────────────────────────────────────────────────────────
 //  taskLidar — DMA UART, Core 1, Prio 2
 //  Attend un paquet lidar (bloquant), met à jour RobotContext.
+//  Publie le scan brut sur robot/lidar_scan à 1 Hz.
 // ───────────────────────────────────────────────────────────────
 void taskLidar(void* pvParameters)
 {
-    LidarSensor* lidar = static_cast<LidarSensor*>(pvParameters);
-    lidar->init();
+    LidarTaskParams* p = static_cast<LidarTaskParams*>(pvParameters);
+    p->lidar->init();
+
+    uint32_t lastScanPub = 0;
+    bool     lastEnabled = false;
+
     for (;;) {
-        lidar->waitAndProcess();
         auto& ctx = RobotContext::instance();
-        ctx.setLidarData(lidar->getData());
-        ctx.setLidarCalibDone(lidar->isCalibDone());
+        bool enabled = ctx.isLidarEnabled();
+
+        // 1. Start/Stop sur transition du flag — avant waitAndProcess()
+        //    pour éviter que _handleStartup() envoie CMD_START alors que
+        //    le lidar doit rester éteint.
+        if (enabled != lastEnabled) {
+            if (enabled) {
+                p->lidar->start();
+                LOG("[taskLidar] Démarrage LiDAR.");
+            } else {
+                p->lidar->stop();
+                LOG("[taskLidar] Arrêt LiDAR.");
+            }
+            lastEnabled = enabled;
+        }
+
+        // 2. Traiter les paquets seulement si actif
+        //    (waitAndProcess appelle _handleStartup qui enverrait CMD_START)
+        if (enabled) {
+            p->lidar->waitAndProcess();
+            ctx.setLidarData(p->lidar->getData());
+            ctx.setLidarCalibDone(p->lidar->isCalibDone());
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+
+        // 3. Publier le scan brut (Toutes les 2000 ms)
+        uint32_t now = millis();
+        if (p->comm->isConnected() && (now - lastScanPub) >= 2000) {
+            lastScanPub = now;
+
+            if (enabled) {
+                const LidarSensor::ScanPoint* pts = p->lidar->getRawScan();
+                uint16_t n = p->lidar->getRawScanCount();
+
+                static constexpr float BIN_DEG = 5.0f;
+                static constexpr uint16_t NBINS = 72;
+                float binDist[NBINS];
+                uint8_t binQual[NBINS];
+                bool binFilled[NBINS];
+                memset(binFilled, 0, sizeof(binFilled));
+
+                for (uint16_t i = 0; i < n; i++) {
+                    if (pts[i].dist < 0.001f) continue;
+                    uint16_t b = (uint16_t)(pts[i].angle / BIN_DEG) % NBINS;
+                    if (!binFilled[b] || pts[i].dist < binDist[b]) {
+                        binDist[b]   = pts[i].dist;
+                        binQual[b]   = pts[i].quality;
+                        binFilled[b] = true;
+                    }
+                }
+
+                std::string msg = "{\"type\":\"LIDAR_SCAN\",\"points\":[";
+                char tmp[48];
+                bool first = true;
+                for (uint16_t b = 0; b < NBINS; b++) {
+                    if (!binFilled[b]) continue;
+                    snprintf(tmp, sizeof(tmp), "%s{\"a\":%.0f,\"d\":%.3f,\"q\":%u}",
+                             first ? "" : ",",
+                             b * BIN_DEG, binDist[b], binQual[b]);
+                    msg += tmp;
+                    first = false;
+                }
+                msg += "]}";
+                p->comm->sendTo("robot/lidar_scan", msg);
+            }
+        }
     }
 }
-
 // ───────────────────────────────────────────────────────────────
 //  taskOTA — 100 Hz, Core 0, Prio 1
 //  Appelle ArduinoOTA.handle() pour permettre le flash WiFi.
@@ -225,8 +296,11 @@ void taskStrategy(void* pvParameters)
                 // Attendre la fin de la calibration lidar avant de démarrer
                 if (!ctx.isLidarCalibDone()) {
                     LOG("[Strategy] Attente calibration zone morte lidar...");
-                    while (!ctx.isLidarCalibDone())
+                    uint32_t _calibTimeout = millis() + 3000;
+                    while (!ctx.isLidarCalibDone() && millis() < _calibTimeout)
                         vTaskDelay(pdMS_TO_TICKS(50));
+                    if (!ctx.isLidarCalibDone())
+                        LOG("[Strategy] Timeout calibration lidar — démarrage quand même");
                 }
                 LOG("[Strategy] Départ dans 5 secondes...");
                 ctx.setMotorSpeeds({});           // moteurs arrêtés pendant l'attente
@@ -240,6 +314,7 @@ void taskStrategy(void* pvParameters)
                 LOG("[Strategy] Arrêt d'urgence");
                 ctx.setState(RobotConstants::State::STANDBY);
                 ctx.setMotorSpeeds({});
+                ctx.setLidarEnabled(false);
             }
 
             // Double appui rapide → cycle de stratégie
@@ -252,7 +327,7 @@ void taskStrategy(void* pvParameters)
 
         // ── Protection batterie ───────────────────────────────
         SensorData batt = ctx.getBattData();
-        if (batt.isValid && batt.value.scalar > 0.0f && batt.value.scalar <= 6.20f &&
+        if (batt.isValid && batt.value.scalar > 0.0f && batt.value.scalar <= 5.80f &&
             state != RobotConstants::State::STANDBY) {
             LOG("[Strategy] BATTERIE CRITIQUE → STANDBY force");
             ctx.setState(RobotConstants::State::STANDBY);
@@ -263,8 +338,11 @@ void taskStrategy(void* pvParameters)
 
         // ── Exécution stratégie (seulement hors STANDBY) ─────
         if (state != RobotConstants::State::STANDBY) {
+            ctx.setLidarEnabled(true);   // défaut ON — la stratégie peut écraser à false
             RobotConstants::ActionCommand cmd = manager->executeStrategy(ctx);
             ctx.setMotorSpeeds(cmd);
+        } else {
+            ctx.setLidarEnabled(false);
         }
 
         vTaskDelay(RTOSConfig::PERIOD_STRATEGY);
@@ -627,7 +705,8 @@ void taskCommand(void* pvParameters)
 
             case CommandType::STOP:
                 ctx.setState(RobotConstants::State::STANDBY);
-                ctx.setMotorSpeeds({});  // STOP moteurs
+                ctx.setMotorSpeeds({});
+                ctx.setLidarEnabled(false);
                 break;
 
             case CommandType::RESET:

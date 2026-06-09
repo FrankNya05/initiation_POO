@@ -6,92 +6,159 @@ using RobotHMI.Services;
 namespace RobotHMI.ViewModels;
 
 // ---------------------------------------------------------------------------
-// LogPanelViewModel — NOUVEAU V2
+// LogPanelViewModel — MODIFIÉ V2.4
 // ---------------------------------------------------------------------------
-// Pilote l'onglet LOGS.
-//
-// Responsabilités :
-//   - Maintient une liste des 100 derniers messages LOG
-//   - Chaque entrée est horodatée [HH:mm:ss]
-//   - Expose un ICommand "Effacer" pour vider la liste
-//   - Reçoit les LOG via le MessageRouter (handler OnLogReceived)
+// Ajouts V2.4 :
+//   - FilterText : filtre les entrées affichées par mot-clé (insensible à la casse)
+//   - FilteredEntries : collection affichée (sous-ensemble de LogEntries)
+//   - ExportCommand : sauvegarde tous les logs sur le Bureau en .txt horodaté
+//   - StatusText : retour d'action (export réussi, erreur, etc.)
 // ---------------------------------------------------------------------------
 
 public class LogPanelViewModel : ViewModelBase
 {
-    // Limite du nombre de messages conservés en mémoire
     private const int MaxLogEntries = 100;
 
-    // -----------------------------------------------------------------------
-    // Liste observable — mise à jour automatiquement dans la Vue
-    // -----------------------------------------------------------------------
+    // ── Collections ───────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Collection des messages LOG horodatés.
-    /// ObservableCollection notifie automatiquement la Vue quand on ajoute/supprime.
-    /// </summary>
-    public ObservableCollection<string> LogEntries { get; } = new();
+    /// <summary>Source de vérité — tous les messages reçus.</summary>
+    public ObservableCollection<string> LogEntries     { get; } = new();
 
-    // -----------------------------------------------------------------------
-    // Commande Effacer
-    // -----------------------------------------------------------------------
+    /// <summary>Vue filtrée — ce que la ListBox affiche.</summary>
+    public ObservableCollection<string> FilteredEntries { get; } = new();
 
-    public ICommand ClearCommand { get; }
+    // ── Filtre texte — MODIFIÉ V2.4 ──────────────────────────────────────
 
-    // -----------------------------------------------------------------------
-    // Constructeur
-    // -----------------------------------------------------------------------
+    private string _filterText = string.Empty;
+
+    public string FilterText
+    {
+        get => _filterText;
+        set
+        {
+            if (SetField(ref _filterText, value))
+                RefreshFilter();
+        }
+    }
+
+    // ── Commandes ─────────────────────────────────────────────────────────
+
+    public ICommand ClearCommand  { get; }
+    public ICommand ExportCommand { get; }   // MODIFIÉ V2.4
+
+    // ── Feedback ──────────────────────────────────────────────────────────
+
+    private string _statusText = "Aucun log reçu";
+    public string StatusText
+    {
+        get => _statusText;
+        private set => SetField(ref _statusText, value);
+    }
+
+    // ── Constructeur ──────────────────────────────────────────────────────
 
     public LogPanelViewModel()
     {
-        ClearCommand = new RelayCommand(OnClear);
+        ClearCommand  = new RelayCommand(OnClear);
+        ExportCommand = new RelayCommand(OnExport);  // MODIFIÉ V2.4
     }
 
-    // -----------------------------------------------------------------------
-    // Handler — appelé par MessageRouter sur thread de fond
-    // -----------------------------------------------------------------------
+    // ── Handler MQTT ──────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Appelé par MessageRouter quand un message LOG arrive.
-    /// Ajoute l'entrée horodatée en haut de la liste (plus récent en premier).
-    /// </summary>
     public void OnLogReceived(string rawJson)
     {
         var message = TelemetryParser.ParseLog(rawJson);
         if (string.IsNullOrEmpty(message)) return;
 
-        var timestamp = DateTime.Now.ToString("HH:mm:ss");
-        var entry     = $"[{timestamp}] {message}";
+        var entry = $"[{DateTime.Now:HH:mm:ss}] {message}";
 
-        // Toujours marshaller vers le thread UI avant de modifier la collection
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            // Insérer en début de liste pour avoir le plus récent en haut
+            // Ajouter en tête (plus récent en premier)
             LogEntries.Insert(0, entry);
-
-            // Garder seulement les 100 derniers messages
             while (LogEntries.Count > MaxLogEntries)
                 LogEntries.RemoveAt(LogEntries.Count - 1);
 
-            // Notifier le compteur affiché
+            // Ajouter à FilteredEntries seulement si ça passe le filtre
+            if (MatchesFilter(entry))
+            {
+                FilteredEntries.Insert(0, entry);
+                // Synchroniser la limite sur FilteredEntries aussi
+                while (FilteredEntries.Count > MaxLogEntries)
+                    FilteredEntries.RemoveAt(FilteredEntries.Count - 1);
+            }
+
             OnPropertyChanged(nameof(EntryCountText));
         });
     }
 
-    // -----------------------------------------------------------------------
-    // Effacer la liste
-    // -----------------------------------------------------------------------
+    // ── Filtre ────────────────────────────────────────────────────────────
+
+    private bool MatchesFilter(string entry)
+    {
+        var f = _filterText.Trim();
+        return string.IsNullOrEmpty(f)
+            || entry.Contains(f, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RefreshFilter()
+    {
+        FilteredEntries.Clear();
+        foreach (var entry in LogEntries)
+            if (MatchesFilter(entry))
+                FilteredEntries.Add(entry);
+        OnPropertyChanged(nameof(EntryCountText));
+    }
+
+    // ── Effacer ───────────────────────────────────────────────────────────
 
     private void OnClear()
     {
         LogEntries.Clear();
+        FilteredEntries.Clear();
         OnPropertyChanged(nameof(EntryCountText));
+        StatusText = "Liste effacée.";
     }
 
-    // -----------------------------------------------------------------------
-    // Compteur affiché
-    // -----------------------------------------------------------------------
+    // ── Export .txt — MODIFIÉ V2.4 ────────────────────────────────────────
 
-    /// <summary>Texte ex: "42 / 100 messages" affiché en bas de l'onglet.</summary>
-    public string EntryCountText => $"{LogEntries.Count} / {MaxLogEntries} messages";
+    private void OnExport()
+    {
+        if (LogEntries.Count == 0)
+        {
+            StatusText = "Aucun log à exporter.";
+            return;
+        }
+
+        try
+        {
+            var desktop  = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            var filename = $"robot_logs_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+            var path     = Path.Combine(desktop, filename);
+
+            // Écrire du plus ancien au plus récent (LogEntries est du plus récent au plus ancien)
+            var lines = LogEntries.Reverse().ToArray();
+            File.WriteAllLines(path, lines);
+
+            StatusText = $"Exporté → {filename}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Erreur export : {ex.Message}";
+        }
+    }
+
+    // ── Compteur ──────────────────────────────────────────────────────────
+
+    public string EntryCountText
+    {
+        get
+        {
+            int total    = LogEntries.Count;
+            int filtered = FilteredEntries.Count;
+            return string.IsNullOrWhiteSpace(_filterText)
+                ? $"{total} / {MaxLogEntries} messages"
+                : $"{filtered} résultat(s) sur {total}";
+        }
+    }
 }

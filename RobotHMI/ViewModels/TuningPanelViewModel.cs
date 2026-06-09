@@ -16,14 +16,16 @@ public class TuningPanelViewModel : ViewModelBase
 {
     private readonly RobotCommunicationService _commService;
 
-    // ── Valeurs initiales PID moteurs (identiques à main.cpp) ────────────
-    private string _kpText = "1.2";
-    private string _kiText = "0.05";
-    private string _kdText = "0.02";
+    // ── Valeurs initiales PID moteurs — synchronisées avec main.cpp ─────────
+    // PID pidLeft(2.0f, 0.15f, 0.0f) / pidRight(2.0f, 0.15f, 0.0f)
+    private string _kpText = "2.0";
+    private string _kiText = "0.15";
+    private string _kdText = "0.0";
 
-    // ── Valeurs initiales PID YAW — MODIFIÉ V2.3 ─────────────────────────
-    private string _yawKpText = "0.5";
-    private string _yawKiText = "0.0";
+    // ── Valeurs initiales PID YAW — synchronisées avec main.cpp ──────────
+    // PID pidYaw(5.0f, 0.5f, 0.0f)
+    private string _yawKpText = "5.0";
+    private string _yawKiText = "0.5";
     private string _yawKdText = "0.0";
 
     public TuningPanelViewModel(RobotCommunicationService commService)

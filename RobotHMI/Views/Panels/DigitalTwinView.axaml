@@ -1,0 +1,329 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RobotHMI.ViewModels"
+             x:Class="RobotHMI.Views.Panels.DigitalTwinView"
+             x:DataType="vm:DigitalTwinViewModel"
+             Background="#0F1923">
+
+    <!--
+        NOUVEAU V2.3 — Onglet JUMEAU NUMÉRIQUE
+        ═══════════════════════════════════════
+
+        Colonne gauche : canvas 500×500 px
+          - Dohyo (cercle blanc ∅770 mm)
+          - Traîne bleue (historique positions EKF)
+          - Flèche blanche (cap robot)
+          - Rectangle jaune (robot orienté)
+          - Point rouge (adversaire lidar)
+          - Points verts/gris (indicateurs TOF FL/FR)
+          - Cercles de référence distance (200 mm, 350 mm)
+
+        Colonne droite : panneaux d'info
+          - Pose EKF (x, y, θ)
+          - Encodeurs (RPM G/D)
+          - TOF (distances FL/FR)
+          - Légende
+    -->
+
+    <Grid ColumnDefinitions="540,*" Margin="12">
+
+        <!-- ══════════════════════════════════════════════════════════════
+             COLONNE GAUCHE — Canvas arène
+             ══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Column="0" Classes="card" Padding="10">
+            <Grid RowDefinitions="Auto,6,*">
+
+                <TextBlock Grid.Row="0" Classes="section-title"
+                           Text="DOHYO — Vue du dessus  (repère EKF · origine = position au démarrage)"/>
+                <Separator Grid.Row="1"/>
+
+                <Viewbox Grid.Row="2" Stretch="Uniform">
+                    <Canvas Width="500" Height="500"
+                            Background="#080F18"
+                            ClipToBounds="True">
+
+                        <!-- ── Fond dohyo ──────────────────────────────────── -->
+                        <!-- Remplissage intérieur -->
+                        <Ellipse Canvas.Left="20" Canvas.Top="20"
+                                 Width="460" Height="460"
+                                 Fill="#0E1A28"/>
+
+                        <!-- Bord blanc : rayon dessin = 230 px → L=20, T=20, W=H=460 -->
+                        <Ellipse Canvas.Left="20" Canvas.Top="20"
+                                 Width="460" Height="460"
+                                 Stroke="#CCCCCC" StrokeThickness="3"
+                                 Fill="Transparent"/>
+
+                        <!-- Bande noire intérieure (30 mm ≈ 18 px) -->
+                        <Ellipse Canvas.Left="38" Canvas.Top="38"
+                                 Width="424" Height="424"
+                                 Stroke="Transparent" StrokeThickness="0"
+                                 Fill="#0E1A28"/>
+
+                        <!-- ── Cercles de référence distance ───────────────── -->
+                        <!-- 200 mm → 200*0.597=119 px → L=131, T=131, W=H=238 -->
+                        <Ellipse Canvas.Left="131" Canvas.Top="131"
+                                 Width="238" Height="238"
+                                 Stroke="#1A3050" StrokeThickness="1"
+                                 Fill="Transparent"
+                                 StrokeDashArray="5,7"/>
+
+                        <!-- 350 mm → 350*0.597=209 px → L=41, T=41, W=H=418 -->
+                        <Ellipse Canvas.Left="41" Canvas.Top="41"
+                                 Width="418" Height="418"
+                                 Stroke="#1A3A55" StrokeThickness="1"
+                                 Fill="Transparent"
+                                 StrokeDashArray="5,7"/>
+
+                        <!-- Labels distance -->
+                        <TextBlock Canvas.Left="255" Canvas.Top="133"
+                                   Text="200mm" FontSize="9"
+                                   Foreground="#244060"/>
+                        <TextBlock Canvas.Left="255" Canvas.Top="43"
+                                   Text="350mm" FontSize="9"
+                                   Foreground="#244060"/>
+
+                        <!-- ── Croix centrale ──────────────────────────────── -->
+                        <Line StartPoint="250,238" EndPoint="250,262"
+                              Stroke="#334A60" StrokeThickness="1"/>
+                        <Line StartPoint="238,250" EndPoint="262,250"
+                              Stroke="#334A60" StrokeThickness="1"/>
+
+                        <!-- Marqueur "N" (nord = +Y monde = haut canvas) -->
+                        <TextBlock Canvas.Left="244" Canvas.Top="25"
+                                   Text="N" FontSize="9" Foreground="#334A60"/>
+
+                        <!-- ══════════════════════════════════════════════════
+                             Éléments dynamiques — liés au ViewModel
+                             ══════════════════════════════════════════════════ -->
+
+                        <!-- Traîne (historique positions EKF) -->
+                        <Polyline Points="{Binding Trail}"
+                                  Stroke="#2255BB" StrokeThickness="2"
+                                  Opacity="0.55"
+                                  StrokeLineCap="Round"/>
+
+                        <!-- Flèche de cap (du centre robot vers l'avant) -->
+                        <Line StartPoint="{Binding ArrowStart}"
+                              EndPoint="{Binding ArrowEnd}"
+                              Stroke="White" StrokeThickness="2.5"
+                              StrokeLineCap="Round"/>
+
+                        <!-- Robot — rectangle orienté, rotation autour du centre -->
+                        <!-- 100mm × 0.597 px/mm ≈ 60px -->
+                        <Rectangle
+                            Canvas.Left="{Binding RobotLeft}"
+                            Canvas.Top="{Binding RobotTop}"
+                            Width="60"
+                            Height="60"
+                            Fill="#CCAA00"
+                            Stroke="#887700"
+                            StrokeThickness="1.5"
+                            RadiusX="3" RadiusY="3"
+                            RenderTransformOrigin="50%, 50%">
+                            <Rectangle.RenderTransform>
+                                <RotateTransform Angle="{Binding RobotAngle}"/>
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+
+                        <!-- Indicateur TOF FL — cercle gris (fond) -->
+                        <Ellipse Canvas.Left="{Binding TofFlLeft}"
+                                 Canvas.Top="{Binding TofFlTop}"
+                                 Width="14" Height="14"
+                                 Fill="#2A4050"/>
+                        <!-- Indicateur TOF FL — cercle vert si actif (80–280 mm) -->
+                        <Ellipse Canvas.Left="{Binding TofFlLeft}"
+                                 Canvas.Top="{Binding TofFlTop}"
+                                 Width="14" Height="14"
+                                 Fill="#00E676"
+                                 IsVisible="{Binding TofFlActive}"/>
+
+                        <!-- Indicateur TOF FR — cercle gris (fond) -->
+                        <Ellipse Canvas.Left="{Binding TofFrLeft}"
+                                 Canvas.Top="{Binding TofFrTop}"
+                                 Width="14" Height="14"
+                                 Fill="#2A4050"/>
+                        <!-- Indicateur TOF FR — cercle vert si actif -->
+                        <Ellipse Canvas.Left="{Binding TofFrLeft}"
+                                 Canvas.Top="{Binding TofFrTop}"
+                                 Width="14" Height="14"
+                                 Fill="#00E676"
+                                 IsVisible="{Binding TofFrActive}"/>
+
+                        <!-- Adversaire lidar — point rouge -->
+                        <Ellipse Canvas.Left="{Binding EnemyLeft}"
+                                 Canvas.Top="{Binding EnemyTop}"
+                                 Width="16" Height="16"
+                                 Fill="#FF1744"
+                                 Stroke="#FF6688"
+                                 StrokeThickness="1.5"
+                                 IsVisible="{Binding EnemyVisible}"
+                                 Opacity="0.9"/>
+                        <!-- Halo ennemi -->
+                        <Ellipse Canvas.Left="{Binding EnemyLeft}"
+                                 Canvas.Top="{Binding EnemyTop}"
+                                 Width="28" Height="28"
+                                 Fill="Transparent"
+                                 Stroke="#FF1744"
+                                 StrokeThickness="1"
+                                 IsVisible="{Binding EnemyVisible}"
+                                 Opacity="0.3"/>
+
+                    </Canvas>
+                </Viewbox>
+            </Grid>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             COLONNE DROITE — Panneaux d'info
+             ══════════════════════════════════════════════════════════════ -->
+        <ScrollViewer Grid.Column="1"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      Margin="12,0,0,0">
+            <StackPanel Spacing="12">
+
+                <!-- ── Pose EKF ───────────────────────────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="section-title" Text="POSE EKF"/>
+                        <Separator/>
+                        <TextBlock Classes="value-mono" FontSize="12"
+                                   Foreground="#00D4FF"
+                                   Text="{Binding PoseText}"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Classes="label" FontSize="10"
+                                   Foreground="#445566"
+                                   Text="Origine : position au démarrage"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Encodeurs ──────────────────────────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="section-title" Text="ENCODEURS (RPM)"/>
+                        <Separator/>
+                        <Grid ColumnDefinitions="*,8,*">
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                <TextBlock Classes="label" FontSize="11"
+                                           Text="Gauche" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="22"
+                                           Foreground="#FF8844"
+                                           HorizontalAlignment="Center"
+                                           Text="{Binding EncLeftText}"/>
+                            </StackPanel>
+                            <Rectangle Grid.Column="1" Width="1"
+                                       Fill="#2A3F55" VerticalAlignment="Stretch"/>
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <TextBlock Classes="label" FontSize="11"
+                                           Text="Droit" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="22"
+                                           Foreground="#FF8844"
+                                           HorizontalAlignment="Center"
+                                           Text="{Binding EncRightText}"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── TOF ────────────────────────────────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="section-title" Text="TOF (distance obstacle)"/>
+                        <Separator/>
+                        <Grid ColumnDefinitions="*,8,*">
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                <TextBlock Classes="label" FontSize="11"
+                                           Text="Avant-G" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="18"
+                                           HorizontalAlignment="Center"
+                                           Text="{Binding TofFlText}">
+                                    <TextBlock.Styles>
+                                        <Style Selector="TextBlock">
+                                            <Setter Property="Foreground"
+                                                    Value="{Binding TofFlActive,
+                                                            Converter={StaticResource BoolToBrushConverter},
+                                                            ConverterParameter=success|accent}"/>
+                                        </Style>
+                                    </TextBlock.Styles>
+                                </TextBlock>
+                            </StackPanel>
+                            <Rectangle Grid.Column="1" Width="1"
+                                       Fill="#2A3F55" VerticalAlignment="Stretch"/>
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <TextBlock Classes="label" FontSize="11"
+                                           Text="Avant-D" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="18"
+                                           HorizontalAlignment="Center"
+                                           Text="{Binding TofFrText}">
+                                    <TextBlock.Styles>
+                                        <Style Selector="TextBlock">
+                                            <Setter Property="Foreground"
+                                                    Value="{Binding TofFrActive,
+                                                            Converter={StaticResource BoolToBrushConverter},
+                                                            ConverterParameter=success|accent}"/>
+                                        </Style>
+                                    </TextBlock.Styles>
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Classes="label" FontSize="10" HorizontalAlignment="Center"
+                                   Text="Vert = zone active SeekStrategy (80–280 mm)"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Légende ────────────────────────────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="7">
+                        <TextBlock Classes="section-title" Text="LÉGENDE"/>
+                        <Separator/>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Rectangle Width="14" Height="14" Fill="#CCAA00"
+                                       RadiusX="2" RadiusY="2" VerticalAlignment="Center"/>
+                            <TextBlock Classes="label" Text="Robot (rectangle orienté)"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Rectangle Width="14" Height="3" Fill="White"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Classes="label" Text="Cap (flèche avant)"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Ellipse Width="14" Height="14" Fill="#FF1744"
+                                     VerticalAlignment="Center"/>
+                            <TextBlock Classes="label" Text="Adversaire détecté (lidar)"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Ellipse Width="14" Height="14" Fill="#00E676"
+                                     VerticalAlignment="Center"/>
+                            <TextBlock Classes="label" Text="TOF actif (cible proche)"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Ellipse Width="14" Height="14" Fill="#2A4050"
+                                     VerticalAlignment="Center"/>
+                            <TextBlock Classes="label" Text="TOF inactif"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Rectangle Width="14" Height="3" Fill="#2255BB"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Classes="label" Text="Traîne EKF (trajectoire)"/>
+                        </StackPanel>
+
+                        <TextBlock Classes="label" FontSize="9"
+                                   Foreground="#445566"
+                                   TextWrapping="Wrap" Margin="0,4,0,0"
+                                   Text="Le robot démarre à l'origine (centre). La pose EKF dérive légèrement avec le temps (intégration encodeurs + gyro)."/>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+    </Grid>
+
+</UserControl>

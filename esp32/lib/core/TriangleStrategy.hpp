@@ -40,7 +40,6 @@ public:
     
     RobotConstants::ActionCommand execute( RobotContext &ctx) override{
         using AC = RobotConstants::ActionCommand;
-        ctx.setLidarEnabled(false);
         EKF::Pose pose = ctx.getPose();
         
         switch (_phase)

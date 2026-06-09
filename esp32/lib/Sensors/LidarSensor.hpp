@@ -18,7 +18,7 @@ namespace LidarProtocol {
 
     constexpr uint8_t  MAX_POINTS = 40;
 
-    constexpr float MIN_DIST_M = 0.05f;
+    constexpr float MIN_DIST_M = 0.15f;
     constexpr float MAX_DIST_M = 12.0f;
 
     constexpr uint8_t MIN_QUALITY = 8;
@@ -32,8 +32,8 @@ namespace LidarProtocol {
 
     // Zone morte par défaut (repli si calibration échoue)
     // Mesuré sur CSV : bruit chassis concentré à 90-100° et 180-230°
-    constexpr float BLIND_CENTER_DEG = 170.0f;
-    constexpr float BLIND_HALF_DEG   =  80.0f;  // couvre 90°-250°
+    constexpr float BLIND_CENTER_DEG = 160.0f;  // mesuré sur scan brut : châssis 105°-225°
+    constexpr float BLIND_HALF_DEG   =  65.0f;  // couvre 95°-225°
 
     // Calibration automatique de la zone morte
     constexpr uint8_t  CALIB_BINS        = 72;                    // 5° par bin
@@ -149,11 +149,37 @@ public:
     void stop() {
         const uint8_t cmd[] = { LidarProtocol::CMD_PREFIX, LidarProtocol::CMD_STOP };
         uart_write_bytes(UART_NUM_2, cmd, sizeof(cmd));
+        _started = false;
     }
+    void start() {
+    // Si déjà démarré, on ne fait rien
+    if (_started) return;
 
+        // Réinitialisation de la machine d'état de lecture des octets
+        _state = State::WAIT_HEADER_1;
+        _packetReady = false;
+
+        // Réinitialisation des buffers de scan
+        _resetScan(false);
+
+        // Déclenche le mécanisme automatique de démarrage dans _handleStartup()
+        _startupTime = millis();
+        _started = false; 
+
+    LOG("[LidarSensor] Requesting Start...");
+    }
     bool  isCalibDone()     const { return _calibDone;   }
     float getBlindCenter()  const { return _blindCenter; }
     float getBlindHalf()    const { return _blindHalf;   }
+
+    struct ScanPoint {
+        float   angle;
+        float   dist;
+        uint8_t quality;
+    };
+
+    const ScanPoint* getRawScan()      const { return _rawScanPub;      }
+    uint16_t         getRawScanCount() const { return _rawScanPubCount; }
 
 private:
 
@@ -200,6 +226,12 @@ private:
     float _nearestAngle;
 
     int _validPoints;
+
+    static constexpr uint16_t MAX_SCAN = 500;
+    ScanPoint _rawScan[MAX_SCAN];        // buffer en cours de remplissage
+    uint16_t  _rawScanCount = 0;
+    ScanPoint _rawScanPub[MAX_SCAN];     // dernière révolution complète
+    uint16_t  _rawScanPubCount = 0;
 
     uint32_t _lastResetMs;
 
@@ -429,11 +461,15 @@ private:
     }
 
     // ─────────────────────────────────────────────
-    void _resetScan() {
-
+    void _resetScan(bool publishNow = false) {
+        if (publishNow && _rawScanCount > 0) {
+            _rawScanPubCount = _rawScanCount;
+            memcpy(_rawScanPub, _rawScan, _rawScanCount * sizeof(ScanPoint));
+        }
         _nearestDist  = LidarProtocol::MAX_DIST_M;
         _nearestAngle = 0;
         _validPoints  = 0;
+        _rawScanCount = 0;
     }
 
     // ─────────────────────────────────────────────
@@ -469,11 +505,18 @@ private:
         if (angleEnd < angleStart)
             angleEnd += 360.0f;
 
-        if (angleStart < _lastAngle - 180.0f ||
-            (now - _lastResetMs) > LidarProtocol::TOUR_MS)
-        {
-            _resetScan();
+        bool revWrap = (angleStart < _lastAngle - 180.0f);
+        bool timeout = (now - _lastResetMs) > LidarProtocol::TOUR_MS;
+        if (revWrap) {
+            // Nouvelle révolution : publier et tout réinitialiser
+            _resetScan(true);
             _lastResetMs = now;
+        } else if (timeout) {
+            // Timeout : réinitialiser seulement le calcul "plus proche" sans toucher au raw scan
+            _nearestDist  = LidarProtocol::MAX_DIST_M;
+            _nearestAngle = 0;
+            _validPoints  = 0;
+            _lastResetMs  = now;
         }
 
         _lastAngle = angleStart;
@@ -489,32 +532,28 @@ private:
             if (_points[i].quality < LidarProtocol::MIN_QUALITY)
                 continue;
 
-            float dist = (_points[i].distRaw / 4.0f) / 1000.0f;
-
-            if (dist < LidarProtocol::MIN_DIST_M ||
-                dist > LidarProtocol::MAX_DIST_M)
-                continue;
-
+            float dist  = (_points[i].distRaw / 4.0f) / 1000.0f;
             float angle = angleStart + i * angleStep;
             angle += LidarProtocol::MOUNT_OFFSET_DEG;
             if (angle >= 360.0f) angle -= 360.0f;
 
+            // Buffer brut : tous les points qualifiés (sans filtre distance ni zone morte)
+            if (_rawScanCount < MAX_SCAN) {
+                _rawScan[_rawScanCount++] = { angle, dist, _points[i].quality };
+            }
+
+            // Calcul nearest : appliquer la zone morte et le filtre distance
+            if (dist < LidarProtocol::MIN_DIST_M || dist > LidarProtocol::MAX_DIST_M)
+                continue;
+
             if (_calibDone) {
-                // Appliquer la zone morte calibrée
                 float aDiff = angle - _blindCenter;
                 if (aDiff >  180.0f) aDiff -= 360.0f;
                 if (aDiff < -180.0f) aDiff += 360.0f;
                 if (fabsf(aDiff) <= _blindHalf) continue;
-            } else {
-                // Phase calibration : accumuler l'histogramme des retours par angle
-                uint8_t bin = (uint8_t)((int)(angle / LidarProtocol::CALIB_BIN_DEG)
-                              % LidarProtocol::CALIB_BINS);
-                if (_calibHits[bin] < 0xFFFF) _calibHits[bin]++;
-                continue; // ne pas inclure dans la mesure courante pendant la calibration
             }
 
             _validPoints++;
-
             if (dist < _nearestDist) {
                 _nearestDist  = dist;
                 _nearestAngle = angle;

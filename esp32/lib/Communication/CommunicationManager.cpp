@@ -123,6 +123,10 @@ void CommunicationManager::send(const std::string& data) {
     active_comm_->send(data);
 }
 
+void CommunicationManager::sendTo(const char* topic, const std::string& data) {
+    if (wifi_) wifi_->sendTo(topic, data);
+}
+
 bool CommunicationManager::isConnected() const {
     if (active_comm_ == nullptr) return false;
     return active_comm_->isConnected();

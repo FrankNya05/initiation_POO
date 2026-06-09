@@ -1,0 +1,439 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RobotHMI.ViewModels"
+             x:Class="RobotHMI.Views.Panels.DashboardPanelView"
+             x:DataType="vm:DashboardPanelViewModel"
+             Background="#0F1923">
+
+    <!--
+        NOUVEAU V2.5 — Onglet TABLEAU DE BORD
+        ══════════════════════════════════════
+        Fusion de JUMEAU + TÉLÉMÉTRIE + MOTEURS en un seul onglet.
+
+        Colonne gauche : Canvas dohyo 500×500 (Viewbox adaptatif)
+        Colonne droite : Batterie/État · Ligne · Lidar/TOF · Moteurs/Encodeurs · Pad moteur
+    -->
+
+    <Grid ColumnDefinitions="540,*" Margin="8">
+
+        <!-- ══════════════════════════════════════════════════════════════
+             COLONNE GAUCHE — Canvas arène
+             ══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Column="0" Classes="card" Padding="10" Margin="0,0,6,0">
+            <Grid RowDefinitions="Auto,6,*,Auto">
+
+                <TextBlock Grid.Row="0" Classes="section-title"
+                           Text="DOHYO — Vue du dessus  (repère EKF · origine = démarrage)"/>
+                <Separator Grid.Row="1"/>
+
+                <!-- Canvas dans un Viewbox pour s'adapter à la hauteur disponible -->
+                <Viewbox Grid.Row="2" Stretch="Uniform">
+                    <Canvas Width="500" Height="500"
+                            Background="#080F18"
+                            ClipToBounds="True">
+
+                        <!-- Remplissage intérieur dohyo -->
+                        <Ellipse Canvas.Left="20" Canvas.Top="20"
+                                 Width="460" Height="460"
+                                 Fill="#0E1A28"/>
+
+                        <!-- Bord blanc -->
+                        <Ellipse Canvas.Left="20" Canvas.Top="20"
+                                 Width="460" Height="460"
+                                 Stroke="#CCCCCC" StrokeThickness="3"
+                                 Fill="Transparent"/>
+
+                        <!-- Bande noire intérieure -->
+                        <Ellipse Canvas.Left="38" Canvas.Top="38"
+                                 Width="424" Height="424"
+                                 Fill="#0E1A28"/>
+
+                        <!-- Cercle référence 200 mm (200×0.597=119px → L=131) -->
+                        <Ellipse Canvas.Left="131" Canvas.Top="131"
+                                 Width="238" Height="238"
+                                 Stroke="#1A3050" StrokeThickness="1"
+                                 Fill="Transparent"
+                                 StrokeDashArray="5,7"/>
+
+                        <!-- Cercle référence 350 mm (350×0.597=209px → L=41) -->
+                        <Ellipse Canvas.Left="41" Canvas.Top="41"
+                                 Width="418" Height="418"
+                                 Stroke="#1A3A55" StrokeThickness="1"
+                                 Fill="Transparent"
+                                 StrokeDashArray="5,7"/>
+
+                        <!-- Labels distance -->
+                        <TextBlock Canvas.Left="255" Canvas.Top="133"
+                                   Text="200mm" FontSize="9" Foreground="#244060"/>
+                        <TextBlock Canvas.Left="255" Canvas.Top="43"
+                                   Text="350mm" FontSize="9" Foreground="#244060"/>
+
+                        <!-- Croix centrale -->
+                        <Line StartPoint="250,238" EndPoint="250,262"
+                              Stroke="#334A60" StrokeThickness="1"/>
+                        <Line StartPoint="238,250" EndPoint="262,250"
+                              Stroke="#334A60" StrokeThickness="1"/>
+
+                        <!-- Marqueur N -->
+                        <TextBlock Canvas.Left="244" Canvas.Top="25"
+                                   Text="N" FontSize="9" Foreground="#334A60"/>
+
+                        <!-- Traîne (historique positions EKF) -->
+                        <Polyline Points="{Binding Trail}"
+                                  Stroke="#2255BB" StrokeThickness="2"
+                                  Opacity="0.55"
+                                  StrokeLineCap="Round"/>
+
+                        <!-- Flèche de cap -->
+                        <Line StartPoint="{Binding ArrowStart}"
+                              EndPoint="{Binding ArrowEnd}"
+                              Stroke="White" StrokeThickness="2.5"
+                              StrokeLineCap="Round"/>
+
+                        <!-- Robot (rectangle orienté) -->
+                        <Rectangle Canvas.Left="{Binding RobotLeft}"
+                                   Canvas.Top="{Binding RobotTop}"
+                                   Width="60" Height="60"
+                                   Fill="#CCAA00" Stroke="#887700"
+                                   StrokeThickness="1.5"
+                                   RadiusX="3" RadiusY="3"
+                                   RenderTransformOrigin="50%, 50%">
+                            <Rectangle.RenderTransform>
+                                <RotateTransform Angle="{Binding RobotAngle}"/>
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+
+                        <!-- TOF FL — fond gris -->
+                        <Ellipse Canvas.Left="{Binding TofFlLeft}"
+                                 Canvas.Top="{Binding TofFlTop}"
+                                 Width="14" Height="14"
+                                 Fill="#2A4050"/>
+                        <!-- TOF FL — vert si actif -->
+                        <Ellipse Canvas.Left="{Binding TofFlLeft}"
+                                 Canvas.Top="{Binding TofFlTop}"
+                                 Width="14" Height="14"
+                                 Fill="#00E676"
+                                 IsVisible="{Binding TofFlActive}"/>
+
+                        <!-- TOF FR — fond gris -->
+                        <Ellipse Canvas.Left="{Binding TofFrLeft}"
+                                 Canvas.Top="{Binding TofFrTop}"
+                                 Width="14" Height="14"
+                                 Fill="#2A4050"/>
+                        <!-- TOF FR — vert si actif -->
+                        <Ellipse Canvas.Left="{Binding TofFrLeft}"
+                                 Canvas.Top="{Binding TofFrTop}"
+                                 Width="14" Height="14"
+                                 Fill="#00E676"
+                                 IsVisible="{Binding TofFrActive}"/>
+
+                        <!-- Adversaire lidar — point rouge -->
+                        <Ellipse Canvas.Left="{Binding EnemyLeft}"
+                                 Canvas.Top="{Binding EnemyTop}"
+                                 Width="16" Height="16"
+                                 Fill="#FF1744" Stroke="#FF6688"
+                                 StrokeThickness="1.5"
+                                 IsVisible="{Binding EnemyVisible}"
+                                 Opacity="0.9"/>
+                        <!-- Halo ennemi -->
+                        <Ellipse Canvas.Left="{Binding EnemyLeft}"
+                                 Canvas.Top="{Binding EnemyTop}"
+                                 Width="28" Height="28"
+                                 Fill="Transparent" Stroke="#FF1744"
+                                 StrokeThickness="1"
+                                 IsVisible="{Binding EnemyVisible}"
+                                 Opacity="0.3"/>
+
+                    </Canvas>
+                </Viewbox>
+
+                <!-- Pose EKF sous le canvas -->
+                <TextBlock Grid.Row="3"
+                           Text="{Binding PoseText}"
+                           FontFamily="Consolas, Courier New, monospace"
+                           FontSize="11" Foreground="#00D4FF"
+                           HorizontalAlignment="Center"
+                           Margin="0,6,0,0"/>
+
+            </Grid>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             COLONNE DROITE — Télémétrie + Pad moteur
+             ══════════════════════════════════════════════════════════════ -->
+        <ScrollViewer Grid.Column="1"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      Padding="0,0,4,0">
+            <StackPanel Spacing="6">
+
+                <!-- ── Batterie + État ─────────────────────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Classes="section-title"
+                                       Text="BATTERIE"/>
+                            <TextBlock Grid.Column="1" Classes="section-title"
+                                       Text="{Binding RobotStatusText}"
+                                       Foreground="#00D4FF"/>
+                        </Grid>
+                        <Separator/>
+                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,4,Auto">
+                            <ProgressBar Grid.Row="0" Grid.Column="0"
+                                         Minimum="0" Maximum="100"
+                                         Value="{Binding BatteryPercent}"
+                                         Height="10" Margin="0,0,8,0"
+                                         VerticalAlignment="Center"
+                                         Foreground="{Binding BatteryCritical,
+                                             Converter={StaticResource BoolToBrushConverter},
+                                             ConverterParameter=danger|success}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1"
+                                       Classes="value-mono" FontSize="16"
+                                       Margin="0,0,8,0"
+                                       Foreground="{Binding BatteryCritical,
+                                           Converter={StaticResource BoolToBrushConverter},
+                                           ConverterParameter=danger|success}"
+                                       Text="{Binding BatteryVoltageText}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2"
+                                       Classes="label"
+                                       Text="{Binding BatteryPercent, StringFormat='{}{0} %'}"
+                                       VerticalAlignment="Center"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0"
+                                       Classes="label" Text="Màj :"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                       Classes="label" Foreground="#546E7A"
+                                       FontFamily="Consolas, Courier New, monospace"
+                                       Text="{Binding LastUpdateText}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Capteurs de ligne ───────────────────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="section-title" Text="CAPTEURS LIGNE"/>
+                        <Separator/>
+                        <Grid ColumnDefinitions="*,*,*,*">
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center" Spacing="4">
+                                <Ellipse Width="20" Height="20" HorizontalAlignment="Center"
+                                         Fill="{Binding LineFrontLeft,
+                                             Converter={StaticResource BoolToBrushConverter},
+                                             ConverterParameter=danger|secondary}"/>
+                                <TextBlock Classes="label" Text="AV-G" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Center" Spacing="4">
+                                <Ellipse Width="20" Height="20" HorizontalAlignment="Center"
+                                         Fill="{Binding LineFrontRight,
+                                             Converter={StaticResource BoolToBrushConverter},
+                                             ConverterParameter=danger|secondary}"/>
+                                <TextBlock Classes="label" Text="AV-D" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center" Spacing="4">
+                                <Ellipse Width="20" Height="20" HorizontalAlignment="Center"
+                                         Fill="{Binding LineBackLeft,
+                                             Converter={StaticResource BoolToBrushConverter},
+                                             ConverterParameter=danger|secondary}"/>
+                                <TextBlock Classes="label" Text="AR-G" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" HorizontalAlignment="Center" Spacing="4">
+                                <Ellipse Width="20" Height="20" HorizontalAlignment="Center"
+                                         Fill="{Binding LineBack,
+                                             Converter={StaticResource BoolToBrushConverter},
+                                             ConverterParameter=danger|secondary}"/>
+                                <TextBlock Classes="label" Text="AR" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Classes="label" FontSize="9"
+                                   Foreground="#445566" HorizontalAlignment="Center"
+                                   Text="Rouge = blanc détecté (bord dohyo)"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Lidar + TOF ─────────────────────────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="section-title" Text="LIDAR / TOF"/>
+                        <Separator/>
+                        <Grid ColumnDefinitions="*,1,*">
+
+                            <!-- Lidar -->
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Classes="label" Text="LIDAR" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="20"
+                                           Foreground="#00D4FF"
+                                           HorizontalAlignment="Center"
+                                           Text="{Binding LidarDistText}"/>
+                                <TextBlock Classes="label"
+                                           HorizontalAlignment="Center"
+                                           Text="{Binding LidarAngleText}"/>
+                                <TextBlock Classes="label" FontSize="10"
+                                           HorizontalAlignment="Center"
+                                           Text="{Binding LidarStatusText}"
+                                           Foreground="{Binding LidarValid,
+                                               Converter={StaticResource BoolToBrushConverter},
+                                               ConverterParameter=success|secondary}"/>
+                            </StackPanel>
+
+                            <!-- Séparateur vertical -->
+                            <Rectangle Grid.Column="1" Fill="#2A3F55" VerticalAlignment="Stretch"/>
+
+                            <!-- TOF -->
+                            <StackPanel Grid.Column="2" Spacing="4">
+                                <TextBlock Classes="label" Text="TOF" HorizontalAlignment="Center"/>
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Grid.Column="0" Classes="label"
+                                               Text="G :" Margin="0,0,6,0"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Classes="value-mono" FontSize="16">
+                                        <TextBlock.Styles>
+                                            <Style Selector="TextBlock">
+                                                <Setter Property="Text" Value="{Binding TofFlText}"/>
+                                                <Setter Property="Foreground"
+                                                        Value="{Binding TofFlActive,
+                                                                Converter={StaticResource BoolToBrushConverter},
+                                                                ConverterParameter=success|accent}"/>
+                                            </Style>
+                                        </TextBlock.Styles>
+                                    </TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Grid.Column="0" Classes="label"
+                                               Text="D :" Margin="0,0,6,0"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Classes="value-mono" FontSize="16">
+                                        <TextBlock.Styles>
+                                            <Style Selector="TextBlock">
+                                                <Setter Property="Text" Value="{Binding TofFrText}"/>
+                                                <Setter Property="Foreground"
+                                                        Value="{Binding TofFrActive,
+                                                                Converter={StaticResource BoolToBrushConverter},
+                                                                ConverterParameter=success|accent}"/>
+                                            </Style>
+                                        </TextBlock.Styles>
+                                    </TextBlock>
+                                </Grid>
+                                <TextBlock Classes="label" FontSize="9"
+                                           Foreground="#445566"
+                                           Text="Vert = zone 80–280 mm"/>
+                            </StackPanel>
+
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Moteurs PWM + Encodeurs ─────────────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="section-title" Text="MOTEURS / ENCODEURS"/>
+                        <Separator/>
+                        <Grid ColumnDefinitions="*,*,*,*">
+
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="label" Text="PWM G" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="18"
+                                           Foreground="#00D4FF" HorizontalAlignment="Center"
+                                           Text="{Binding MotorLeftText}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="label" Text="PWM D" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="18"
+                                           Foreground="#00D4FF" HorizontalAlignment="Center"
+                                           Text="{Binding MotorRightText}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="label" Text="RPM G" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="18"
+                                           Foreground="#FF8844" HorizontalAlignment="Center"
+                                           Text="{Binding EncLeftText}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="3" HorizontalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="label" Text="RPM D" HorizontalAlignment="Center"/>
+                                <TextBlock Classes="value-mono" FontSize="18"
+                                           Foreground="#FF8844" HorizontalAlignment="Center"
+                                           Text="{Binding EncRightText}"/>
+                            </StackPanel>
+
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Pad directionnel (test moteurs) ────────────────── -->
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="section-title" Text="TEST MOTEURS"/>
+                        <Separator/>
+
+                        <!-- Avertissement compact -->
+                        <Border Background="#2A1A00" BorderBrush="#FF9100"
+                                BorderThickness="1" CornerRadius="4" Padding="8,4">
+                            <TextBlock Text="⚠  Robot soulevé avant envoi de commandes"
+                                       Foreground="#FF9100" FontSize="11"
+                                       HorizontalAlignment="Center"/>
+                        </Border>
+
+                        <!-- Slider vitesse -->
+                        <Grid ColumnDefinitions="*,60">
+                            <Slider Grid.Column="0"
+                                    Minimum="0" Maximum="255"
+                                    Value="{Binding Speed}"
+                                    VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1"
+                                       Classes="value-mono" FontSize="20"
+                                       Foreground="#00D4FF"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding SpeedText}"/>
+                        </Grid>
+
+                        <!-- D-Pad en croix -->
+                        <Grid RowDefinitions="Auto,6,Auto,6,Auto"
+                              ColumnDefinitions="Auto,6,Auto,6,Auto"
+                              HorizontalAlignment="Center">
+
+                            <Button Grid.Row="0" Grid.Column="2"
+                                    Classes="motor-btn"
+                                    Command="{Binding ForwardCommand}"
+                                    ToolTip.Tip="Avancer">↑</Button>
+
+                            <Button Grid.Row="2" Grid.Column="0"
+                                    Classes="motor-btn"
+                                    Command="{Binding LeftCommand}"
+                                    ToolTip.Tip="Tourner gauche">←</Button>
+
+                            <Button Grid.Row="2" Grid.Column="2"
+                                    Classes="motor-stop-btn"
+                                    Command="{Binding StopCommand}"
+                                    ToolTip.Tip="Arrêt moteurs">⏹</Button>
+
+                            <Button Grid.Row="2" Grid.Column="4"
+                                    Classes="motor-btn"
+                                    Command="{Binding RightCommand}"
+                                    ToolTip.Tip="Tourner droite">→</Button>
+
+                            <Button Grid.Row="4" Grid.Column="2"
+                                    Classes="motor-btn"
+                                    Command="{Binding BackwardCommand}"
+                                    ToolTip.Tip="Reculer">↓</Button>
+
+                        </Grid>
+
+                        <!-- Dernière commande -->
+                        <TextBlock Classes="label"
+                                   Foreground="#00D4FF"
+                                   HorizontalAlignment="Center"
+                                   FontFamily="Consolas, Courier New, monospace"
+                                   Text="{Binding LastCommandText}"/>
+
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+    </Grid>
+
+</UserControl>
