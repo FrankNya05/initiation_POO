@@ -75,6 +75,21 @@ public static class TelemetryParser
                 data.MotorRight = ReadInt(motors, "right");
             }
 
+            // Pose EKF — MODIFIÉ V2.3
+            if (payload.TryGetProperty("pose", out var pose))
+            {
+                data.PoseX     = ReadFloat(pose, "x");
+                data.PoseY     = ReadFloat(pose, "y");
+                data.PoseTheta = ReadFloat(pose, "theta");
+            }
+
+            // Encodeurs — MODIFIÉ V2.3
+            if (payload.TryGetProperty("encoders", out var encoders))
+            {
+                data.EncoderLeftRpm  = ReadFloat(encoders, "leftRpm");
+                data.EncoderRightRpm = ReadFloat(encoders, "rightRpm");
+            }
+
             return data;
         }
         catch (JsonException ex)
@@ -113,22 +128,26 @@ public static class TelemetryParser
 
     public static string? ParseAck(string rawJson)
     {
+        // Format robot : {"type":"ACK","payload":{"command":"..."}}
         try
         {
             using var doc = JsonDocument.Parse(rawJson);
-            return doc.RootElement.TryGetProperty("payload", out var p)
-                   ? p.GetString() : null;
+            if (!doc.RootElement.TryGetProperty("payload", out var p)) return null;
+            if (p.TryGetProperty("command", out var cmd)) return cmd.GetString();
+            return p.ValueKind == JsonValueKind.String ? p.GetString() : null;
         }
         catch { return null; }
     }
 
     public static string? ParseLog(string rawJson)
     {
+        // Format robot : {"type":"LOG","payload":{"message":"..."}}
         try
         {
             using var doc = JsonDocument.Parse(rawJson);
-            return doc.RootElement.TryGetProperty("payload", out var p)
-                   ? p.GetString() : null;
+            if (!doc.RootElement.TryGetProperty("payload", out var p)) return null;
+            if (p.TryGetProperty("message", out var msg)) return msg.GetString();
+            return p.ValueKind == JsonValueKind.String ? p.GetString() : null;
         }
         catch { return null; }
     }
