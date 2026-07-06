@@ -22,12 +22,41 @@ IMUSensor::IMUSensor(SensorPosition pos) {
 //  Appelé une fois dans setup() ou initAll().
 // ─────────────────────────────────────────────
 bool IMUSensor::init() {
-    // Tente de démarrer la communication I2C avec le MPU6050.
-    // begin() retourne false si le capteur ne répond pas.
-   // Wire.begin(21,22);
-    if (!_mpu.begin()) {
-        LOG("[IMUSensor] MPU6050 introuvable sur le bus I2C.");
+    // Étape 1 : sonde brute pour trouver l'adresse (0x68 AD0=LOW ou 0x69 AD0=HIGH)
+    uint8_t foundAddr = 0;
+    for (int i = 0; i < 5 && foundAddr == 0; i++) {
+        Wire.setClock(100000);
+        for (uint8_t addr : {(uint8_t)0x68, (uint8_t)0x69}) {
+            Wire.beginTransmission(addr);
+            if (Wire.endTransmission() == 0) { foundAddr = addr; break; }
+        }
+        if (foundAddr == 0) delay(200);
+    }
+    if (foundAddr == 0) {
+        Serial.println("[IMUSensor] MPU6050 absent (0x68 et 0x69)");
         return false;
+    }
+    Serial.printf("[IMUSensor] MPU6050 detecte a 0x%02X\n", foundAddr);
+
+    // Étape 2 : init Adafruit — configure i2c_dev (ignoré si WHO_AM_I clone)
+    // Note : begin() réessaie 5× en interne avec delay(10). Même en cas d'échec,
+    //        i2c_dev reste valide et getEvent() fonctionne directement via i2c_dev.
+    bool adaOk = false;
+    for (int i = 0; i < 3 && !adaOk; i++) {
+        Wire.setClock(100000);
+        adaOk = _mpu.begin(foundAddr);
+        if (!adaOk) delay(200);
+    }
+
+    if (!adaOk) {
+        // begin() échoue (souvent WHO_AM_I clone ≠ 0x68) — config manuelle via Wire brut
+        Serial.printf("[IMUSensor] begin() echoue — init manuelle sur 0x%02X\n", foundAddr);
+        Wire.beginTransmission(foundAddr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(); // wake
+        delay(100);
+        Wire.beginTransmission(foundAddr); Wire.write(0x1A); Wire.write(0x04); Wire.endTransmission(); // DLPF 21Hz
+        Wire.beginTransmission(foundAddr); Wire.write(0x1B); Wire.write(0x08); Wire.endTransmission(); // gyro ±500°/s
+        Wire.beginTransmission(foundAddr); Wire.write(0x1C); Wire.write(0x08); Wire.endTransmission(); // accel ±4g
+        delay(10);
     }
 
     // Configure la plage du gyroscope (voir IMUConfig dans le .hpp)

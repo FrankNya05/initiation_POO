@@ -18,7 +18,7 @@ namespace LidarProtocol {
 
     constexpr uint8_t  MAX_POINTS = 40;
 
-    constexpr float MIN_DIST_M = 0.05f;
+    constexpr float MIN_DIST_M = 0.15f;
     constexpr float MAX_DIST_M = 12.0f;
 
     constexpr uint8_t MIN_QUALITY = 8;
@@ -30,9 +30,18 @@ namespace LidarProtocol {
     // Objet en face (devrait être 180°) apparaît à ~97° → offset = +83°
     constexpr float MOUNT_OFFSET_DEG = 83.0f;
 
-    // Zone morte — châssis du robot bloque le scan autour de 0° (coordonnées corrigées)
-    constexpr float BLIND_CENTER_DEG =   0.0f;  // centre de la zone masquée (arrière robot)
-    constexpr float BLIND_HALF_DEG   =  80.0f;  // ±80° autour de 0° ignorés
+    // Zone morte par défaut (repli si calibration échoue)
+    // Mesuré sur CSV : bruit chassis concentré à 90-100° et 180-230°
+    constexpr float BLIND_CENTER_DEG = 160.0f;  // mesuré sur scan brut : châssis 105°-225°
+    constexpr float BLIND_HALF_DEG   =  65.0f;  // couvre 95°-225°
+
+    // Calibration automatique de la zone morte
+    constexpr uint8_t  CALIB_BINS        = 72;                    // 5° par bin
+    constexpr float    CALIB_BIN_DEG     = 360.0f / CALIB_BINS;
+    constexpr uint32_t CALIB_DURATION_MS = 2000;                  // durée de la phase de calibration
+    constexpr float    CALIB_DEAD_RATIO  = 0.30f;                 // bin mort si < 30% du max
+    constexpr float    BLIND_MIN_HALF    = 10.0f;                 // demi-largeur minimum
+    constexpr float    BLIND_MAX_HALF    = 120.0f;                // demi-largeur maximum
 }
 
 class LidarSensor : public SensorsInterface {
@@ -57,6 +66,10 @@ public:
         , _validPoints(0)
         , _lastResetMs(0)
         , _uartQueue(nullptr)
+        , _calibDone(false)
+        , _calibStartMs(0)
+        , _blindCenter(LidarProtocol::BLIND_CENTER_DEG)
+        , _blindHalf(LidarProtocol::BLIND_HALF_DEG)
     {}
 
     bool init() override {
@@ -75,6 +88,11 @@ public:
                      UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
         uart_driver_install(UART_NUM_2, 4096, 0, 20, &_uartQueue, 0);
 
+        memset(_calibHits, 0, sizeof(_calibHits));
+        _calibDone   = true;   // zone morte fixe mesurée empiriquement
+        _blindCenter = LidarProtocol::BLIND_CENTER_DEG;
+        _blindHalf   = LidarProtocol::BLIND_HALF_DEG;
+
         _startupTime = millis();
         _started = false;
 
@@ -85,6 +103,7 @@ public:
     // Non-blocking: vide le ring buffer sans attendre (garde la compatibilité SensorsInterface).
     bool update() override {
         _handleStartup();
+        _checkCalibDone();
         bool gotPacket = false;
         uint8_t buf[128];
         int len = uart_read_bytes(UART_NUM_2, buf, sizeof(buf), 0);
@@ -103,6 +122,7 @@ public:
     // Bloquant : réveille la tâche dès qu'un événement UART arrive (interrupt/DMA → queue).
     bool waitAndProcess(TickType_t timeout = pdMS_TO_TICKS(20)) {
         _handleStartup();
+        _checkCalibDone();
         uart_event_t event;
         if (!xQueueReceive(_uartQueue, &event, timeout))
             return false;
@@ -129,7 +149,37 @@ public:
     void stop() {
         const uint8_t cmd[] = { LidarProtocol::CMD_PREFIX, LidarProtocol::CMD_STOP };
         uart_write_bytes(UART_NUM_2, cmd, sizeof(cmd));
+        _started = false;
     }
+    void start() {
+    // Si déjà démarré, on ne fait rien
+    if (_started) return;
+
+        // Réinitialisation de la machine d'état de lecture des octets
+        _state = State::WAIT_HEADER_1;
+        _packetReady = false;
+
+        // Réinitialisation des buffers de scan
+        _resetScan(false);
+
+        // Déclenche le mécanisme automatique de démarrage dans _handleStartup()
+        _startupTime = millis();
+        _started = false; 
+
+    LOG("[LidarSensor] Requesting Start...");
+    }
+    bool  isCalibDone()     const { return _calibDone;   }
+    float getBlindCenter()  const { return _blindCenter; }
+    float getBlindHalf()    const { return _blindHalf;   }
+
+    struct ScanPoint {
+        float   angle;
+        float   dist;
+        uint8_t quality;
+    };
+
+    const ScanPoint* getRawScan()      const { return _rawScanPub;      }
+    uint16_t         getRawScanCount() const { return _rawScanPubCount; }
 
 private:
 
@@ -177,6 +227,12 @@ private:
 
     int _validPoints;
 
+    static constexpr uint16_t MAX_SCAN = 500;
+    ScanPoint _rawScan[MAX_SCAN];        // buffer en cours de remplissage
+    uint16_t  _rawScanCount = 0;
+    ScanPoint _rawScanPub[MAX_SCAN];     // dernière révolution complète
+    uint16_t  _rawScanPubCount = 0;
+
     uint32_t _lastResetMs;
 
     QueueHandle_t _uartQueue;
@@ -188,8 +244,80 @@ private:
     uint32_t _csErrCount = 0;
     uint32_t _lastStatMs = 0;
 
+    // ── Calibration zone morte ────────────────────
+    uint16_t _calibHits[LidarProtocol::CALIB_BINS];
+    bool     _calibDone;
+    uint32_t _calibStartMs;
+    float    _blindCenter;
+    float    _blindHalf;
+
     // ─────────────────────────────────────────────
     //  Non-blocking startup (FreeRTOS safe)
+    // ─────────────────────────────────────────────
+    void _checkCalibDone() {
+        if (_calibDone || !_started) return;
+        if (millis() - _calibStartMs < LidarProtocol::CALIB_DURATION_MS) return;
+        _finalizeCalib();
+    }
+
+    // ─────────────────────────────────────────────
+    void _finalizeCalib() {
+        // Trouver le maximum de hits pour normaliser
+        uint16_t maxHits = 0;
+        for (uint8_t i = 0; i < LidarProtocol::CALIB_BINS; i++)
+            if (_calibHits[i] > maxHits) maxHits = _calibHits[i];
+
+        if (maxHits == 0) {
+            _calibDone = true;
+            LOGF("[Lidar] Calib: aucune donnée — repli center=%.0f° half=±%.0f°\n",
+                 _blindCenter, _blindHalf);
+            return;
+        }
+
+        // Marquer les bins morts (trop peu de retours)
+        bool dead[LidarProtocol::CALIB_BINS];
+        uint16_t threshold = (uint16_t)(maxHits * LidarProtocol::CALIB_DEAD_RATIO);
+        for (uint8_t i = 0; i < LidarProtocol::CALIB_BINS; i++)
+            dead[i] = (_calibHits[i] <= threshold);
+
+        // Trouver le plus long arc contigu de bins morts (tableau circulaire)
+        uint8_t bestStart = 0, bestLen = 0, curLen = 0;
+        for (uint8_t i = 0; i < 2 * LidarProtocol::CALIB_BINS; i++) {
+            if (dead[i % LidarProtocol::CALIB_BINS]) {
+                if (++curLen > bestLen) {
+                    bestLen   = curLen;
+                    bestStart = (uint8_t)((i - curLen + 1) % LidarProtocol::CALIB_BINS);
+                }
+            } else {
+                curLen = 0;
+            }
+            if (curLen >= LidarProtocol::CALIB_BINS) break;
+        }
+
+        if (bestLen < 2) {
+            _calibDone = true;
+            LOGF("[Lidar] Calib: zone morte non détectée — repli center=%.0f° half=±%.0f°\n",
+                 _blindCenter, _blindHalf);
+            return;
+        }
+
+        // Calculer le centre et la demi-largeur de l'arc mort
+        float halfLen = bestLen / 2.0f;
+        float center  = fmod((bestStart + halfLen) * LidarProtocol::CALIB_BIN_DEG, 360.0f);
+        float half    = halfLen * LidarProtocol::CALIB_BIN_DEG;
+
+        // Sanity clamp
+        if (half < LidarProtocol::BLIND_MIN_HALF) half = LidarProtocol::BLIND_MIN_HALF;
+        if (half > LidarProtocol::BLIND_MAX_HALF) half = LidarProtocol::BLIND_MAX_HALF;
+
+        _blindCenter = center;
+        _blindHalf   = half;
+        _calibDone   = true;
+
+        LOGF("[Lidar] Calib OK — zone morte center=%.1f° half=±%.1f° (%d bins)\n",
+             _blindCenter, _blindHalf, bestLen);
+    }
+
     // ─────────────────────────────────────────────
     void _handleStartup() {
 
@@ -200,9 +328,10 @@ private:
             const uint8_t cmd[] = { LidarProtocol::CMD_PREFIX, LidarProtocol::CMD_START };
             uart_write_bytes(UART_NUM_2, cmd, sizeof(cmd));
 
-            _started = true;
+            _started      = true;
+            _calibStartMs = millis();
 
-            LOG("[LidarSensor] Scan Started");
+            LOG("[LidarSensor] Scan Started — calibration zone morte...");
         }
     }
 
@@ -332,11 +461,15 @@ private:
     }
 
     // ─────────────────────────────────────────────
-    void _resetScan() {
-
+    void _resetScan(bool publishNow = false) {
+        if (publishNow && _rawScanCount > 0) {
+            _rawScanPubCount = _rawScanCount;
+            memcpy(_rawScanPub, _rawScan, _rawScanCount * sizeof(ScanPoint));
+        }
         _nearestDist  = LidarProtocol::MAX_DIST_M;
         _nearestAngle = 0;
         _validPoints  = 0;
+        _rawScanCount = 0;
     }
 
     // ─────────────────────────────────────────────
@@ -372,11 +505,18 @@ private:
         if (angleEnd < angleStart)
             angleEnd += 360.0f;
 
-        if (angleStart < _lastAngle - 180.0f ||
-            (now - _lastResetMs) > LidarProtocol::TOUR_MS)
-        {
-            _resetScan();
+        bool revWrap = (angleStart < _lastAngle - 180.0f);
+        bool timeout = (now - _lastResetMs) > LidarProtocol::TOUR_MS;
+        if (revWrap) {
+            // Nouvelle révolution : publier et tout réinitialiser
+            _resetScan(true);
             _lastResetMs = now;
+        } else if (timeout) {
+            // Timeout : réinitialiser seulement le calcul "plus proche" sans toucher au raw scan
+            _nearestDist  = LidarProtocol::MAX_DIST_M;
+            _nearestAngle = 0;
+            _validPoints  = 0;
+            _lastResetMs  = now;
         }
 
         _lastAngle = angleStart;
@@ -392,24 +532,28 @@ private:
             if (_points[i].quality < LidarProtocol::MIN_QUALITY)
                 continue;
 
-            float dist = (_points[i].distRaw / 4.0f) / 1000.0f;
-
-            if (dist < LidarProtocol::MIN_DIST_M ||
-                dist > LidarProtocol::MAX_DIST_M)
-                continue;
-
+            float dist  = (_points[i].distRaw / 4.0f) / 1000.0f;
             float angle = angleStart + i * angleStep;
             angle += LidarProtocol::MOUNT_OFFSET_DEG;
             if (angle >= 360.0f) angle -= 360.0f;
 
-            // Rejeter les points dans la zone morte (châssis, coordonnées corrigées)
-            float aDiff = angle - LidarProtocol::BLIND_CENTER_DEG;
-            if (aDiff >  180.0f) aDiff -= 360.0f;
-            if (aDiff < -180.0f) aDiff += 360.0f;
-            if (fabsf(aDiff) <= LidarProtocol::BLIND_HALF_DEG) continue;
+            // Buffer brut : tous les points qualifiés (sans filtre distance ni zone morte)
+            if (_rawScanCount < MAX_SCAN) {
+                _rawScan[_rawScanCount++] = { angle, dist, _points[i].quality };
+            }
+
+            // Calcul nearest : appliquer la zone morte et le filtre distance
+            if (dist < LidarProtocol::MIN_DIST_M || dist > LidarProtocol::MAX_DIST_M)
+                continue;
+
+            if (_calibDone) {
+                float aDiff = angle - _blindCenter;
+                if (aDiff >  180.0f) aDiff -= 360.0f;
+                if (aDiff < -180.0f) aDiff += 360.0f;
+                if (fabsf(aDiff) <= _blindHalf) continue;
+            }
 
             _validPoints++;
-
             if (dist < _nearestDist) {
                 _nearestDist  = dist;
                 _nearestAngle = angle;

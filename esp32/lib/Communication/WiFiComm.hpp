@@ -88,7 +88,7 @@ public:
 
     void begin() override {
         _instance = this;
-        _client.setBufferSize(1024);  // JSON telemetry ~500 bytes > défaut 256
+        _client.setBufferSize(4096);  // scan lidar ~1400 bytes + telemetry ~500 bytes
         _client.setServer(_brokerIp, _brokerPort);
         _client.setCallback(_mqttCallback);
         _connectWifi();
@@ -98,6 +98,11 @@ public:
     void send(const std::string& data) override {
         if (!_client.connected()) _connectMQTT();
         _client.publish(_topicPub, data.c_str());
+    }
+
+    void sendTo(const char* topic, const std::string& data) {
+        if (!_client.connected()) _connectMQTT();
+        _client.publish(topic, data.c_str());
     }
 
     bool isConnected() const override {

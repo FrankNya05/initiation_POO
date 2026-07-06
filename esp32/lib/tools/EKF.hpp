@@ -15,7 +15,7 @@
 //  Paramètres robot (depuis RobotConstants.hpp) :
 //  - Diamètre roue    : WHEEL_DIAMETER_MM  (30 mm)
 //  - Entraxe          : WHEELBASE_MM       (56 mm)
-//  - Pulses/tour      : PULSES_PER_REV     (2800)
+//  - Pulses/tour      : PULSES_PER_REV     (1400)
 //
 //  Usage :
 //      EKF ekf;
@@ -50,7 +50,12 @@ public:
     //  @param dr  distance roue droite en mm (signée)
     void predict(float dl, float dr) {
         const float d      = (dl + dr) * 0.5f;
-        const float dTheta = (dr - dl) / WHEELBASE;
+        // Correction du glissement latéral pendant les virages brusques.
+        // Les roues glissent quand dl et dr sont de signe opposé (pivot sur place).
+        // Calibrer : faire tourner 360° → SLIP_FACTOR = angle_physique_deg / 360.
+        constexpr float SLIP_FACTOR = 1.0f;  // à ajuster après test 360°
+        const bool  sharpTurn = (dl * dr < 0.0f);
+        const float dTheta    = (dr - dl) / WHEELBASE * (sharpTurn ? SLIP_FACTOR : 1.0f);
         const float midTheta = _theta + dTheta * 0.5f;
 
         _thetaPrev = _theta;
@@ -81,32 +86,35 @@ public:
     }
 
     // ── Mise à jour — gyroscope IMU ───────────────────────────
-    //  Appeler à chaque cycle taskSensors (50 Hz)
+    //  Appeler à chaque cycle taskEncoder (200 Hz)
     //  @param gyroRate  vitesse angulaire gx (lacet) en rad/s — signe : CCW > 0
     //  @param dtSec     intervalle de temps en secondes
     void updateIMU(float gyroRate, float dtSec) {
-    const float zMeasured = gyroRate * dtSec;
-    // Calcul de la variation d'angle vue par les encodeurs
-    float dThetaEncoder = _theta - _thetaPrev;
-    
-    // Innovation = (Mesure IMU) - (Estimation Encodeurs)
-    float innovation = _wrapAngle(zMeasured - dThetaEncoder);
+        const float zMeasured  = gyroRate * dtSec;
+        const float dThetaEnc  = _theta - _thetaPrev;
+        const float innovation = _wrapAngle(zMeasured - dThetaEnc);
 
-    const float S = _cov[2][2] + _rIMU;
-    float K[3] = { _cov[0][2] / S, _cov[1][2] / S, _cov[2][2] / S };
+        const float S  = _cov[2][2] + _rIMU;
+        const float K2 = _cov[2][2] / S;
 
-    // Correction de l'état
-    _x     += K[0] * innovation;
-    _y     += K[1] * innovation;
-    _theta  = _wrapAngle(_theta + K[2] * innovation);
+        // Le gyro mesure uniquement l'angle — K[0]=K[1]=0 : x et y non corrigés.
+        // Corriger x,y avec une mesure angulaire polluerait la position quand
+        // les covariances croisées cov[0][2]/cov[1][2] deviennent non nulles.
+        _theta = _wrapAngle(_theta + K2 * innovation);
 
-    // Mise à jour de la covariance P = (I - KH)P  avec H = [0,0,1]
-    for (int i = 0; i < 3; i++) {
-        _cov[i][0] -= K[i] * _cov[2][0];
-        _cov[i][1] -= K[i] * _cov[2][1];
-        _cov[i][2] -= K[i] * _cov[2][2];
+        // P = (I - KH)P avec K=[0,0,K2], H=[0,0,1] → seule la ligne 2 change
+        const float s = 1.0f - K2;
+        for (int j = 0; j < 3; j++) _cov[2][j] *= s;
+        // Restaure la symétrie : colonne 2 = transposée de la ligne 2
+        for (int i = 0; i < 3; i++) _cov[i][2] = _cov[2][i];
+
+        // Symétrie numérique globale (accumulation d'erreurs float sur toutes les itérations)
+        for (int i = 0; i < 3; i++)
+            for (int j = i + 1; j < 3; j++) {
+                float avg = (_cov[i][j] + _cov[j][i]) * 0.5f;
+                _cov[i][j] = _cov[j][i] = avg;
+            }
     }
-}
 
     // ── Accesseurs ────────────────────────────────────────────
     Pose  getPose()             const { return { _x, _y, _theta }; }
@@ -126,15 +134,15 @@ private:
     float _x = 0.0f, _y = 0.0f, _theta = 0.0f, _thetaPrev = 0.0f;
     float _cov[3][3] = {};   // matrice de covariance (evite le conflit avec le macro _P de newlib)
 
-    float _qXY    = 0.5f;   // bruit processus position  (mm²/mm parcouru)
-    float _qTheta = 0.1f;   // bruit processus cap       (rad²/rad tourné)
-    float _rIMU   = 0.01f;  // bruit mesure gyroscope    (rad²)
+    float _qXY    = 0.021f;  // bruit processus position  (mm²/mm parcouru) — calibré test droit: cross-track var=11.2mm² / 540mm
+    float _qTheta = 0.1f;    // bruit processus cap       (rad²/rad tourné)
+    float _rIMU   = 1e-4f;   // bruit mesure gyroscope (rad²) — calibré: K≈85% pendant virage rapide
 
     static constexpr float WHEELBASE = RobotConstants::WHEELBASE_MM;
 
     static float _wrapAngle(float a) {
-        while (a >  3.14159f) a -= 2.0f * 3.14159f;
-        while (a < -3.14159f) a += 2.0f * 3.14159f;
+        while (a >  (float)M_PI) a -= 2.0f * (float)M_PI;
+        while (a < -(float)M_PI) a += 2.0f * (float)M_PI;
         return a;
     }
 

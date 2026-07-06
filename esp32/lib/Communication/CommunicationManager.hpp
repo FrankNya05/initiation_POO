@@ -118,6 +118,9 @@ public:
     // Send a message through the active channel.
     void send(const std::string& data);
 
+    // Send a message to a specific MQTT topic (WiFi only).
+    void sendTo(const char* topic, const std::string& data);
+
     // Returns true if the active channel has a live connection.
     bool isConnected() const;
 

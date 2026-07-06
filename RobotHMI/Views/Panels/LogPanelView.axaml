@@ -5,15 +5,48 @@
              x:DataType="vm:LogPanelViewModel"
              Background="#0F1923">
 
-    <!-- NOUVEAU V2 — Onglet LOGS : liste scrollable + bouton Effacer -->
+    <!--
+        MODIFIÉ V2.4 — Onglet LOGS
+        Ajouts : filtre texte, export .txt, StatusText
+    -->
 
-    <Grid RowDefinitions="*,Auto" Margin="16">
+    <Grid RowDefinitions="Auto,*,Auto" Margin="16">
 
-        <!-- Liste scrollable des messages LOG -->
-        <Border Grid.Row="0" Classes="card" Padding="0">
+        <!-- Barre de filtre -->
+        <Border Grid.Row="0" Classes="card" Margin="0,0,0,8" Padding="10,8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+
+                <TextBlock Grid.Column="0"
+                           Text="Filtre :"
+                           Classes="label"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+
+                <TextBox Grid.Column="1"
+                         Text="{Binding FilterText}"
+                         Watermark="Taper pour filtrer… ex: taskLidar, EKF, ATTACK"
+                         FontFamily="Consolas, Courier New, monospace"
+                         FontSize="12"
+                         VerticalAlignment="Center"/>
+
+                <!-- Bouton X pour effacer le filtre -->
+                <Button Grid.Column="2"
+                        Command="{Binding ClearCommand}"
+                        IsVisible="{Binding FilterText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                        Background="Transparent"
+                        Foreground="#78909C"
+                        MinHeight="32"
+                        Padding="8,4"
+                        Margin="6,0,0,0"
+                        Content="✕ Filtre"/>
+
+            </Grid>
+        </Border>
+
+        <!-- Liste des logs -->
+        <Border Grid.Row="1" Classes="card" Padding="0">
             <Grid RowDefinitions="Auto,*">
 
-                <!-- En-tête -->
                 <Border Grid.Row="0"
                         Background="#1C2B3A"
                         BorderBrush="#2A3F55"
@@ -24,9 +57,8 @@
                                Margin="0"/>
                 </Border>
 
-                <!-- Liste avec police monospace pour lisibilité des logs -->
                 <ListBox Grid.Row="1"
-                         ItemsSource="{Binding LogEntries}"
+                         ItemsSource="{Binding FilteredEntries}"
                          Background="#0F1923"
                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                          ScrollViewer.VerticalScrollBarVisibility="Auto">
@@ -44,23 +76,46 @@
             </Grid>
         </Border>
 
-        <!-- Barre inférieure : compteur + bouton Effacer -->
-        <Grid Grid.Row="1"
-              ColumnDefinitions="*,Auto"
+        <!-- Barre inférieure : compteur + statut + boutons -->
+        <Grid Grid.Row="2"
+              ColumnDefinitions="*,Auto,Auto,Auto"
               Margin="0,8,0,0">
 
+            <!-- Compteur / résultats filtre -->
             <TextBlock Grid.Column="0"
                        Text="{Binding EntryCountText}"
                        Classes="label"
                        VerticalAlignment="Center"/>
 
-            <Button Grid.Column="1"
+            <!-- Statut (export, erreur…) -->
+            <TextBlock Grid.Column="1"
+                       Text="{Binding StatusText}"
+                       Classes="label"
+                       Foreground="#FF9100"
+                       VerticalAlignment="Center"
+                       Margin="0,0,12,0"/>
+
+            <!-- Export .txt -->
+            <Button Grid.Column="2"
+                    Command="{Binding ExportCommand}"
+                    Background="#1C2B3A"
+                    Foreground="#00D4FF"
+                    BorderBrush="#2A3F55"
+                    BorderThickness="1"
+                    MinHeight="40"
+                    Padding="14,8"
+                    Margin="0,0,8,0"
+                    Content="💾  Exporter .txt"/>
+
+            <!-- Effacer -->
+            <Button Grid.Column="3"
                     Command="{Binding ClearCommand}"
                     Background="#2A3F55"
                     Foreground="#FF9100"
                     MinHeight="40"
-                    Padding="16,8"
+                    Padding="14,8"
                     Content="🗑  Effacer"/>
+
         </Grid>
 
     </Grid>

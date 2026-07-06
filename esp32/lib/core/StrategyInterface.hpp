@@ -29,9 +29,23 @@ public:
     //  Appelée par StrategyManager::executeStrategy() depuis taskStrategy.
     virtual RobotConstants::ActionCommand execute(RobotContext& ctx) = 0;
 
+    // ── Appelé à chaque activation de la stratégie ───────────
+    //  Implémentation par défaut vide — surcharger si nécessaire.
+    virtual void reset() {}
+
     // ── Nom de la stratégie ───────────────────────────────────
     virtual const char* name() const = 0;
 
     // ── Couleur LED associée ──────────────────────────────────
     virtual LedColor color() const = 0;
+
+    // ── Lidar requis ? ────────────────────────────────────────
+    //  false par défaut — stratégies géométriques (Square, Circle…)
+    //  Override avec return true si la stratégie lit getLidarData()
+    virtual bool needsLidar() const { return false; }
+
+    // ── LQR cap requis ? ──────────────────────────────────────
+    //  true par défaut — désactiver pour les stratégies qui changent
+    //  de direction trop fréquemment (Q-learning, etc.)
+    virtual bool needsLQR()   const { return true; }
 };

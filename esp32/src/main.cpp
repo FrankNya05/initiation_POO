@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <ArduinoOTA.h>
 #include "RTOSConfig.hpp"
 #include "RobotContext.hpp"
 #include "DriverLedRGB.hpp"
@@ -10,6 +11,11 @@
 #include "BerserkerStrategy.hpp"
 #include "TrackStrategy.hpp"
 #include "CircleDohyoStrategy.hpp"
+#include "SeekStrategy.hpp"
+#include "SquareStrategy.hpp"
+#include "TriangleStrategy.hpp"
+#include "MPC.hpp"
+#include "QStrategy.hpp"
 #include "SensorManger.hpp"
 #include "IMUsensor.hpp"
 #include "IRSensor.hpp"
@@ -22,12 +28,17 @@
 
 static constexpr const char* WIFI_SSID       = "S25Ultra";
 static constexpr const char* WIFI_PASS       = "sylvain123";
-static constexpr const char* MQTT_BROKER_IP  = "10.200.134.169";
+static constexpr const char* MQTT_BROKER_IP  = "10.141.137.191";
 static constexpr uint16_t    MQTT_PORT       = 1883;
 static constexpr const char* MQTT_TOPIC_PUB  = "robot/telemetry";
 static constexpr const char* MQTT_TOPIC_SUB  = "robot/cmd";
 
-SemaphoreHandle_t g_logMutex = nullptr;
+SemaphoreHandle_t g_logMutex  = nullptr;
+TaskHandle_t      g_commTask  = nullptr;
+TaskHandle_t      g_stratTask = nullptr;
+TaskHandle_t      g_encTask   = nullptr;
+TaskHandle_t      g_sensTask  = nullptr;
+TaskHandle_t      g_cmdTask   = nullptr;
 
 DriverLedRGB        led;
 StrategyManager     stratManager;
@@ -35,31 +46,42 @@ AdamantineStrategy  stratAdamantine;
 BerserkerStrategy   stratBerserker;
 TrackStrategy       stratTrack;
 CircleDohyoStrategy stratCircle;
+SeekStrategy        stratSeek;
+SquareStrategy      stratSquare;
+TriangleStrategy    stratTriangle;
+MPCStrategy         stratMPC;
+QStrategy           stratQ;
 LedTaskParams       ledParams { &led, &stratManager };
+OTATaskParams       otaParams { &led };
 
 SensorManager sensorManager;
 DriverManager driverManager;
 
-// PPR par moteur — gauche 100:1 (2800), droit ~50:1 (1400)
+// PPR par moteur — gauche 50:1 (1400), droit 50:1 CH-N20-3 (1400)
 Encoder encLeft (RobotConfig::ENCODER_MOTOR_LEFT_P,  RobotConfig::ENCODER_MOTOR_LEFT_H,
                  RobotConstants::PULSES_PER_REV);
 Encoder encRight(RobotConfig::ENCODER_MOTOR_RIGHT_P, RobotConfig::ENCODER_MOTOR_RIGHT_H,
                  RobotConstants::PULSES_PER_REV_RIGHT);
 
 EKF ekf;
-PID pidLeft (0.5f, 0.1f, 0.0f);
-PID pidRight(0.5f, 0.1f, 0.0f);
-PID pidYaw  (0.5f, 0.0f, 0.0f);  // kp=0.5 → ~0.5 PWM par deg/s d'écart (augmenter si drift, diminuer si oscillations)
+PID pidLeft (2.0f, 0.15f, 0.0f);
+PID pidRight(2.0f, 0.15f, 0.0f);
+PID pidYaw  (5.0f, 0.5f,  0.0f);  // kp=5.0 ki=0.5 — theta-based heading hold (~11mm/m dérive)
 EKFParams ekfParams { &ekf, &encLeft, &encRight, &driverManager, &pidLeft, &pidRight, &pidYaw };
 
-static float g_pidKp = 0.5f, g_pidKi = 0.1f, g_pidKd = 0.0f;
+static float g_pidKp = 2.0f, g_pidKi = 0.15f, g_pidKd = 0.0f;
 
 LidarSensor          lidar;
 CommunicationManager comm;
+LidarTaskParams      lidarParams { &lidar, &comm };
 
-static void onStrategyCmd(const char* name)            { stratManager.setByName(name); }
+static void onStrategyCmd(const char* name) {
+    if (stratManager.setByName(name))
+        if (RobotContext::instance().getState() == RobotConstants::State::STANDBY)
+            RobotContext::instance().setState(RobotConstants::State::SEARCH);
+}
 static void onLedCmd(uint8_t r, uint8_t g, uint8_t b) { led.setColor(r, g, b); }
-static void onPoseResetCmd()                           { RobotContext::instance().setPose({0.0f, 0.0f, 0.0f}); }
+static void onPoseResetCmd()                           { ekf.reset(); RobotContext::instance().setPose({0.0f, 0.0f, 0.0f}); }
 
 static void onPidKp(float v) {
     g_pidKp = v;
@@ -77,7 +99,7 @@ static void onPidKd(float v) {
     pidRight.setGains(g_pidKp, g_pidKi, g_pidKd);
 }
 
-static float g_pidYawKp = 0.5f, g_pidYawKi = 0.0f, g_pidYawKd = 0.0f;
+static float g_pidYawKp = 5.0f, g_pidYawKi = 0.5f, g_pidYawKd = 0.0f;
 static void onPidYawKp(float v) {
     g_pidYawKp = v;
     pidYaw.setGains(g_pidYawKp, g_pidYawKi, g_pidYawKd);
@@ -99,22 +121,38 @@ CommandTaskParams cmdParams {
     onPoseResetCmd
 };
 
-void taskLidar(void* pv) {
-    lidar.init();
-    for (;;) {
-        lidar.waitAndProcess();
-        RobotContext::instance().setLidarData(lidar.getData());
-    }
-}
-
 void setup() {
     Serial.begin(115200);
     g_logMutex = xSemaphoreCreateMutex();
     RobotQueues::init();
 
-    Wire.begin(21, 22);
-    Wire.setClock(400000);
+    // I2C bus recovery — libère tout esclave bloqué après reboot OTA/logiciel.
+    // Le MPU6050 peut tenir SDA bas s'il était en milieu de transaction.
+    // 9 impulsions SCL + condition STOP : procédure standard I2C recovery.
+    {
+        constexpr uint8_t SDA_PIN = 21, SCL_PIN = 22;
+        pinMode(SCL_PIN, OUTPUT); digitalWrite(SCL_PIN, HIGH);
+        pinMode(SDA_PIN, INPUT_PULLUP);
+        delayMicroseconds(10);
+        for (int i = 0; i < 9; i++) {
+            if (digitalRead(SDA_PIN) == HIGH) break;
+            digitalWrite(SCL_PIN, LOW);  delayMicroseconds(5);
+            digitalWrite(SCL_PIN, HIGH); delayMicroseconds(5);
+        }
+        pinMode(SDA_PIN, OUTPUT);
+        digitalWrite(SDA_PIN, LOW);  delayMicroseconds(5);
+        digitalWrite(SCL_PIN, HIGH); delayMicroseconds(5);
+        digitalWrite(SDA_PIN, HIGH); delayMicroseconds(5);
+        pinMode(SDA_PIN, INPUT);
+        pinMode(SCL_PIN, INPUT);
+    }
 
+    // 100kHz requis pour ce module MPU6050 — 400kHz échoue à l'init
+    Wire.begin(21, 22);
+    Wire.setClock(100000);
+    delay(100);  // laisser le bus I2C se stabiliser avant initAll()
+
+    // Capteurs I2C initialisés AVANT les moteurs — le driver moteur peut perturber le bus
     sensorManager.add(new IMUSensor(SensorPosition::CENTER));
     sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR,  SensorPosition::FRONT_LEFT));
     sensorManager.add(new TOFSensor(RobotConfig::TOF_IIC_ADDR1, SensorPosition::FRONT_RIGHT));
@@ -123,6 +161,9 @@ void setup() {
     sensorManager.add(new LineSensor(SensorPosition::BACK,        2000, false));
     sensorManager.add(new BattSensor(SensorPosition::BATTERY));
     sensorManager.add(new SensorSwitch(RobotConfig::START_BUTTON));
+
+    bool sensorsOk = sensorManager.initAll();
+    Serial.printf("[main] Capteurs init : %s\n", sensorsOk ? "OK" : "ERREUR");
 
     driverManager.add(new DriverMotor());
     bool motorOk = driverManager.initAll();
@@ -134,9 +175,6 @@ void setup() {
     pidRight.setLimits(-100, 100);
     pidYaw.setLimits(-40, 40);   // correction max ±40 PWM pour éviter les oscillations
 
-    bool sensorsOk = sensorManager.initAll();
-    Serial.printf("[main] Capteurs init : %s\n", sensorsOk ? "OK" : "ERREUR");
-
     Serial.printf("[main] Encodeurs : L=%d PPR  R=%d PPR  (gear L=%d:1  R=%d:1)\n",
         RobotConstants::PULSES_PER_REV, RobotConstants::PULSES_PER_REV_RIGHT,
         RobotConstants::GEAR_RATIO_LEFT, RobotConstants::GEAR_RATIO_RIGHT);
@@ -145,21 +183,28 @@ void setup() {
     stratManager.registerStrategy(&stratAdamantine);
     stratManager.registerStrategy(&stratBerserker);
     stratManager.registerStrategy(&stratCircle);
-
+    stratManager.registerStrategy(&stratSeek);
+    stratManager.registerStrategy(&stratSquare);
+    stratManager.registerStrategy(&stratTriangle);
+    stratManager.registerStrategy(&stratMPC);
+    stratManager.registerStrategy(&stratQ);
     led.init();
     RobotContext::instance().setState(RobotConstants::State::STANDBY);
 
     comm.configureWifi(WIFI_SSID, WIFI_PASS, MQTT_BROKER_IP,
                        MQTT_PORT, MQTT_TOPIC_PUB, MQTT_TOPIC_SUB);
     comm.selectChannel(CommChannel::WIFI);
+    WiFi.setSleep(false);              // désactive le mode veille WiFi → OTA UDP fiable
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);
 
     xTaskCreatePinnedToCore(taskLed,      "LED",      RTOSConfig::STACK_LED,      &ledParams,     RTOSConfig::PRIO_LED,      nullptr, RTOSConfig::CORE_LED);
     xTaskCreatePinnedToCore(taskSensors,  "SENSORS",  RTOSConfig::STACK_SENSORS,  &sensorManager, RTOSConfig::PRIO_SENSORS,  nullptr, RTOSConfig::CORE_SENSORS);
-    xTaskCreatePinnedToCore(taskLidar,    "LIDAR",    4096,                        nullptr,        2,                         nullptr, 1);
-    xTaskCreatePinnedToCore(taskStrategy, "STRATEGY", RTOSConfig::STACK_STRATEGY, &stratManager,  RTOSConfig::PRIO_STRATEGY, nullptr, RTOSConfig::CORE_STRATEGY);
-    xTaskCreatePinnedToCore(taskEncoders, "ENCODERS", RTOSConfig::STACK_ENCODER,  &ekfParams,     RTOSConfig::PRIO_ENCODER,  nullptr, RTOSConfig::CORE_ENCODER);
-    xTaskCreatePinnedToCore(taskComm,     "COMM",     RTOSConfig::STACK_COMM,     &comm,          RTOSConfig::PRIO_COMM,     nullptr, RTOSConfig::CORE_COMM);
-    xTaskCreatePinnedToCore(taskCommand,  "CMD",      RTOSConfig::STACK_COMMAND,  &cmdParams,     RTOSConfig::PRIO_COMMAND,  nullptr, RTOSConfig::CORE_COMMAND);
+    xTaskCreatePinnedToCore(taskLidar,    "LIDAR",    RTOSConfig::STACK_LIDAR,    &lidarParams,   RTOSConfig::PRIO_LIDAR,    nullptr, RTOSConfig::CORE_LIDAR);
+    xTaskCreatePinnedToCore(taskStrategy, "STRATEGY", RTOSConfig::STACK_STRATEGY, &stratManager,  RTOSConfig::PRIO_STRATEGY, &g_stratTask, RTOSConfig::CORE_STRATEGY);
+    xTaskCreatePinnedToCore(taskEncoders, "ENCODERS", RTOSConfig::STACK_ENCODER,  &ekfParams,     RTOSConfig::PRIO_ENCODER,  &g_encTask,   RTOSConfig::CORE_ENCODER);
+    xTaskCreatePinnedToCore(taskComm,     "COMM",     RTOSConfig::STACK_COMM,     &comm,          RTOSConfig::PRIO_COMM,     &g_commTask,  RTOSConfig::CORE_COMM);
+    xTaskCreatePinnedToCore(taskCommand,  "CMD",      RTOSConfig::STACK_COMMAND,  &cmdParams,     RTOSConfig::PRIO_COMMAND,  &g_cmdTask,   RTOSConfig::CORE_COMMAND);
+    xTaskCreatePinnedToCore(taskOTA,      "OTA",      RTOSConfig::STACK_OTA,      &otaParams,     RTOSConfig::PRIO_OTA,      nullptr, RTOSConfig::CORE_OTA);
 
     Serial.println("[main] Toutes les taches demarrees");
 }
@@ -218,10 +263,12 @@ void loop() {
         encL.rpm, encR.rpm, rpmDiff,
         rpmDiff >  3.0f ? "(R trop rapide)" :
         rpmDiff < -3.0f ? "(L trop rapide)" : "(equilibre)");
+    int dispPwmL = cmd.isStop() ? 0 : ekfParams.lastPwmLeft;
+    int dispPwmR = cmd.isStop() ? 0 : ekfParams.lastPwmRight;
     Serial.printf("PWM    L=%4d  R=%4d   correction PID: L=%+d  R=%+d\n",
-        ekfParams.lastPwmLeft, ekfParams.lastPwmRight,
-        ekfParams.lastPwmLeft  - cmd.leftSpeed,
-        ekfParams.lastPwmRight - cmd.rightSpeed);
+        dispPwmL, dispPwmR,
+        dispPwmL - cmd.leftSpeed,
+        dispPwmR - cmd.rightSpeed);
 
     // ── Diagnostics secondaires ───────────────────────────────
     Serial.printf("LINE   FL=%s(%4d)  FR=%s(%4d)  B=%s(%4d)\n",
@@ -235,6 +282,15 @@ void loop() {
     Serial.printf("BATT   %.2f V  [%s]   MQTT %s\n",
         batt.value.scalar, batt.isValid ? "OK" : "ERR",
         comm.isConnected() ? "connecte" : "deconnecte");
+    Serial.printf("RAM disponible : %d octets\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+
+    // ── Stack watermarks (octets libres minimum depuis le démarrage) ──
+    Serial.printf("STACK  STRATEGY=%4u  ENCODER=%4u  CMD=%4u  COMM=%4u  LOOP=%4u\n",
+        g_stratTask ? uxTaskGetStackHighWaterMark(g_stratTask) * sizeof(StackType_t) : 0,
+        g_encTask   ? uxTaskGetStackHighWaterMark(g_encTask)   * sizeof(StackType_t) : 0,
+        g_cmdTask   ? uxTaskGetStackHighWaterMark(g_cmdTask)   * sizeof(StackType_t) : 0,
+        g_commTask  ? uxTaskGetStackHighWaterMark(g_commTask)  * sizeof(StackType_t) : 0,
+        uxTaskGetStackHighWaterMark(nullptr)                   * sizeof(StackType_t));
 
     vTaskDelay(pdMS_TO_TICKS(500));  // 2 Hz pour voir la rotation en temps réel
 }

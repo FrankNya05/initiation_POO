@@ -56,15 +56,32 @@ public:
         _lock(); auto d = _lidarData; _unlock(); return d;
     }
 
-    // Active ou désactive le scan Lidar (vérifié par taskLidar).
-    // Chaque stratégie SET ce flag à chaque execute() — la dernière
-    // stratégie active l'emporte (pas d'état résiduel entre switchs).
+    // Contrôle on/off du lidar — lu par taskLidar pour start()/stop().
+    // taskStrategy positionne ce flag avant chaque executeStrategy() ;
+    // n'importe quelle autre tâche peut l'écraser à tout moment.
     void setLidarEnabled(bool en) {
         _lock(); _lidarEnabled = en; _unlock();
     }
 
     bool isLidarEnabled() {
         _lock(); bool en = _lidarEnabled; _unlock(); return en;
+    }
+
+    void setLqrEnabled(bool en) {
+        _lock(); _lqrEnabled = en; _unlock();
+    }
+
+    bool isLqrEnabled() {
+        _lock(); bool en = _lqrEnabled; _unlock(); return en;
+    }
+
+    // Vrai dès que la calibration automatique de la zone morte est terminée.
+    void setLidarCalibDone(bool done) {
+        _lock(); _lidarCalibDone = done; _unlock();
+    }
+
+    bool isLidarCalibDone() {
+        _lock(); bool v = _lidarCalibDone; _unlock(); return v;
     }
 
     // ───────────────────────────────────────────────────────────
@@ -159,6 +176,23 @@ public:
         _lock(); auto p = _pose; _unlock(); return p;
     }
 
+    // ── Cap idéal pour la prochaine ligne droite ──────────────
+    // Permet à une stratégie de forcer headingTarget dans taskEncoders
+    // au lieu de capturer pose.theta (qui peut être légèrement erroné
+    // après un virage). consumeIdealHeading() retourne false si non défini.
+    void setIdealHeading(float theta) {
+        _lock(); _idealHeading = theta; _idealHeadingSet = true; _unlock();
+    }
+
+    bool consumeIdealHeading(float& out) {
+        _lock();
+        bool s = _idealHeadingSet;
+        out = _idealHeading;
+        _idealHeadingSet = false;
+        _unlock();
+        return s;
+    }
+
     // ───────────────────────────────────────────────────────────
     //  Commande moteurs
     // ───────────────────────────────────────────────────────────
@@ -180,7 +214,9 @@ private:
     // ── Données internes ──────────────────────────────────────
     RobotConstants::State         _state       = RobotConstants::State::STANDBY;
     SensorData                    _lidarData;
-    bool                          _lidarEnabled = true;
+    bool                          _lidarEnabled    = false;
+    bool                          _lqrEnabled      = true;
+    bool                          _lidarCalibDone  = false;
     SensorData                    _lineData[9];     // indexé par _posToIndex
     SensorData                    _tofData[9];      // indexé par _posToIndex
     SensorData                    _imuData;
@@ -189,6 +225,8 @@ private:
     SensorData                    _battData;
     EKF::Pose                     _pose;
     RobotConstants::ActionCommand _motorSpeeds;
+    float                         _idealHeading    = 0.0f;
+    bool                          _idealHeadingSet = false;
 
     // ── Mutex FreeRTOS ────────────────────────────────────────
     SemaphoreHandle_t _mutex = nullptr;

@@ -25,13 +25,13 @@
 class AdamantineStrategy : public StrategyInterface {
 public:
 
-    const char* name()  const override { return "Adamantine"; }
-    LedColor    color() const override { return LedColor::CYAN; }
+    const char* name()       const override { return "Adamantine"; }
+    LedColor    color()      const override { return LedColor::CYAN; }
+    bool        needsLidar() const override { return true; }
 
     RobotConstants::ActionCommand execute(RobotContext& ctx) override {
 
         using AC = RobotConstants::ActionCommand;
-        ctx.setLidarEnabled(true);
 
         // ── 0. EVADE verrouillé — durée minimale garantie ─────
         uint32_t now = millis();

@@ -33,6 +33,7 @@ public:
     void setStrategy(StrategyInterface* strategy) {
         _current = strategy;
         if (_current) {
+            _current->reset();
             LOGF("[StrategyManager] Stratégie active : %s\n", _current->name());
         }
     }
@@ -45,15 +46,16 @@ public:
     }
 
     // ── Sélectionner par nom (commande HMI) ───────────────────
-    void setByName(const char* name) {
+    bool setByName(const char* name) {
         for (uint8_t i = 0; i < _count; i++) {
             if (strcasecmp(_strategies[i]->name(), name) == 0) {
                 _currentIdx = i;
                 setStrategy(_strategies[i]);
-                return;
+                return true;
             }
         }
         LOGF("[StrategyManager] Stratégie inconnue : %s\n", name);
+        return false;
     }
 
     // ── Exécuter la stratégie courante ────────────────────────
@@ -63,12 +65,14 @@ public:
     }
 
     // ── Accesseurs ────────────────────────────────────────────
-    const char* currentName()  const { return _current ? _current->name()  : "none"; }
-    LedColor    currentColor() const { return _current ? _current->color() : LedColor::YELLOW; }
-    bool        hasStrategy()  const { return _current != nullptr; }
+    const char* currentName()       const { return _current ? _current->name()       : "none"; }
+    LedColor    currentColor()      const { return _current ? _current->color()      : LedColor::YELLOW; }
+    bool        hasStrategy()       const { return _current != nullptr; }
+    bool        currentNeedsLidar() const { return _current ? _current->needsLidar() : false; }
+    bool        currentNeedsLQR()   const { return _current ? _current->needsLQR()   : true;  }
 
 private:
-    static constexpr uint8_t MAX_STRATEGIES = 8;
+    static constexpr uint8_t MAX_STRATEGIES = 10;
     StrategyInterface* _strategies[MAX_STRATEGIES] = {};
     uint8_t            _count      = 0;
     uint8_t            _currentIdx = 0;

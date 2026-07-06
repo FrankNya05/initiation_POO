@@ -34,6 +34,15 @@ public class SensorData
     public int MotorLeft  { get; set; }  // -255 à 255
     public int MotorRight { get; set; }  // -255 à 255
 
+    // Pose EKF — MODIFIÉ V2.3
+    public float PoseX     { get; set; }  // mm
+    public float PoseY     { get; set; }  // mm
+    public float PoseTheta { get; set; }  // rad
+
+    // Encodeurs — MODIFIÉ V2.3
+    public float EncoderLeftRpm  { get; set; }
+    public float EncoderRightRpm { get; set; }
+
     // Horodatage
     public long Timestamp { get; set; }
 }

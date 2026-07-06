@@ -10,7 +10,6 @@ All enumerated sensors for this allpication
 
 // Structure envoyée via la queue
 
-
 enum class SensorType
 {
     LIDAR,
@@ -53,6 +52,7 @@ enum class SensorDims : uint8_t {
     VEC3 = 3,
     IMU6 = 6
 };
+
 
 union SensorValue {
     float scalar;

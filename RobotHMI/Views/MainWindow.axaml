@@ -9,7 +9,7 @@
         MinWidth="800" MinHeight="480"
         Background="#0F1923">
 
-    <!-- MODIFIÉ V2.1 — Ajout onglet REGLAGES (6e onglet) -->
+    <!-- MODIFIÉ V2.5 — 7 onglets → 5 : CONTRÔLE · TABLEAU · LOGS · RÉGLAGES · CONNEXION -->
 
     <Grid RowDefinitions="Auto,*,Auto">
 
@@ -23,27 +23,27 @@
         <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}"
                     Background="#0F1923">
 
+            <!-- 0 : CONTRÔLE — stratégie + boutons START/STOP -->
             <TabItem Header="CONTRÔLE">
                 <panels:ControlPanelView DataContext="{Binding ControlPanel}"/>
             </TabItem>
 
-            <TabItem Header="TÉLÉMÉTRIE">
-                <panels:TelemetryPanelView DataContext="{Binding TelemetryPanel}"/>
+            <!-- 1 : TABLEAU — dohyo + télémétrie + test moteurs (V2.5) -->
+            <TabItem Header="TABLEAU">
+                <panels:DashboardPanelView DataContext="{Binding DashboardPanel}"/>
             </TabItem>
 
-            <TabItem Header="MOTEURS">
-                <panels:MotorTestPanelView DataContext="{Binding MotorTestPanel}"/>
-            </TabItem>
-
+            <!-- 2 : LOGS -->
             <TabItem Header="LOGS">
                 <panels:LogPanelView DataContext="{Binding LogPanel}"/>
             </TabItem>
 
-            <!-- NOUVEAU V2.1 -->
+            <!-- 3 : RÉGLAGES — tuning PID -->
             <TabItem Header="REGLAGES">
                 <panels:TuningPanelView DataContext="{Binding TuningPanel}"/>
             </TabItem>
 
+            <!-- 4 : CONNEXION — MQTT / BLE -->
             <TabItem Header="CONNEXION">
                 <panels:ConnectionPanelView DataContext="{Binding ConnectionPanel}"/>
             </TabItem>
